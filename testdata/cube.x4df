@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<x4df>
+	<mesh name="TriCube"> <!-- static cube defined by triangles --> 
+		<nodes src="nodesmat"/> <!-- declare the nodes matrix -->
+		<topology name="tris" src="trismat" elemtype="Tri1NL"/> <!-- declare triangle topology -->
+		<field name="nodefield" src="fieldmat"/> <!-- declare per-node field -->
+	</mesh>
+	<array name="nodesmat"> <!-- list of cube vertex nodes -->
+		0.0 0.0 0.0 
+		1.0 0.0 0.0
+		0.0 1.0 0.0
+		1.0 1.0 0.0
+		0.0 0.0 1.0
+		1.0 0.0 1.0
+		0.0 1.0 1.0
+		1.0 1.0 1.0
+	</array>
+	<array name="trismat" shape="12 3" type="uint8"> <!-- list of triangle indices -->
+		1 0 3
+		0 2 3
+		0 1 4
+		1 5 4
+		3 2 7
+		2 6 7
+		4 5 6
+		5 7 6
+		1 3 5
+		3 7 5
+		2 0 6
+		0 4 6
+	</array>
+	<array name="fieldmat" shape="8">1 2 3 4 5 6 7 8</array> <!-- per-node data values -->
+</x4df>

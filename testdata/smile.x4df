@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<x4df>
+	<image name="Smile">
+		<timescheme start="0" step="1"/>
+		<transform>
+			<position>10 20 30</position>
+			<rmatrix>1 0 0 0 1 0 0 0 1</rmatrix>
+			<scale>3 2 0</scale>
+		</transform>
+		
+		<imagedata src="smilemat1"/>
+		<imagedata src="smilemat">
+			<transform>
+				<position>105 205 305</position>
+				<rmatrix>1 0 5 0 1 0 5 0 1</rmatrix>
+				<scale>3 2 0</scale>
+			</transform>
+		</imagedata>
+		
+	</image>
+	<array name="smilemat" shape="6 5" dimorder="YX" type="uint8" filename='smile.dat' offset="0"/> 
+</x4df>
