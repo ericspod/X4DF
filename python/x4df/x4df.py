@@ -1,3 +1,23 @@
+# X4DF
+# Copyright (C) 2017 Eric Kerfoot, King's College London, all rights reserved
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 
 import xml.etree.ElementTree as ET
 from collections import OrderedDict
@@ -373,9 +393,7 @@ def writeArrayData(data,type_,format_):
 	out=StringIO('')
 
 	if format_==validFormats[0]:
-		isfloat=np.issubdtype(dtype_,np.float)
-		fmt='%s'#'%.10f' if isfloat else '%i'
-		np.savetxt(out,reshape2D(data),fmt=fmt)
+		np.savetxt(out,reshape2D(data),fmt='%s')
 		dat=out.getvalue()
 	else:
 		dat=data.astype(dtype_).tostring()
@@ -448,18 +466,3 @@ def writeFile(obj,obj_or_path=None,overwriteFiles=True):
 	finally:
 		if isinstance(obj_or_path,str):
 			stream.close()
-
-
-if __name__=='__main__':
-	#print readFile('./cube1.4df')
-	#print readFile('./cube2.4df')
-	#print readFile('./smile.4df')
-	print readFile('<?xml version="1.0" encoding="UTF-8"?><x4df></x4df>')
-
-	import sys
-	writeFile(readFile('./cube2.4df'),'cube2_test.4df')
-
-	df= readFile('cube2_test.4df')
-	print df
-
-	writeFile(readFile('./smile.4df'),sys.stdout)
