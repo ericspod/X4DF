@@ -1,0 +1,36 @@
+start=element x4df { (Meta|Mesh|Image|Array)* }
+Name= attribute name { text } # component name
+Src= attribute src { text } # source array name
+Val= attribute val { text } # metadata value as attribute
+Shape= attribute shape { text } # array shape
+Timestep=attribute timestep { xsd:double } # timestep for node/field def 
+Start= attribute start { xsd:double } # start time
+Step= attribute step { xsd:double } # time increment
+DimOrder=attribute dimorder { text } # ordering of X, Y, Z, T, C, N dimension descriptors
+Type=attribute type { text } # array value value, default "double"
+ElemType=attribute elemtype { text } # element type, ie. GeomOrderBasis def
+Format=attribute format { "ascii"|"base64"|"base64_gz"|"binary"|"binary_gz" } # array format
+Filename=attribute filename { text } # filename storing array data
+Sep=attribute sep { text } # array element separator character(s)
+TopoName=attribute toponame { text } # field topology name
+Spatial=attribute spatial { text } # name of spatial topology field is for
+FieldType=attribute fieldtype { "node"|"elem"|"index" } #  per-node, per-element, or per-topology index field
+Offset = attribute offset { xsd:integer } # array offset value, skip rows for text, bytes for binary
+InitialNodes=attribute initialnodes { text } # initial node array for displacement node sets
+
+anyElement = element * { attribute * {text}*, mixed{anyElement*} } # matches any xml
+
+Position=element position { text }
+RMatrix=element rmatrix { text }
+Scale=element scale { text }
+Transform=element transform { Position?, RMatrix?, Scale? } # 3D transform definition
+
+Meta=element meta { Name, Val?, mixed {(Meta|anyElement)*} } # metadata containing arbitrary sub-elements
+Topology=element topology { Name, Src, ElemType?, Spatial?, Meta* } # mesh topology definition
+Nodes=element nodes { Src, InitialNodes?, Timestep?, Meta* } # mesh nodes definition
+Field=element field { Name, Src, Timestep?, TopoName?, Spatial?, FieldType?, Meta* } # mesh field definition
+ImageData=element imagedata { Src, Timestep?, Transform?, Meta* } # image data definition
+TimeScheme=element timescheme { Start, Step } # time scheme definition for time-dependent meshes or images
+Mesh= element mesh { Name, TimeScheme?, Nodes+, Topology*, Field*, Meta* } # mesh definition
+Image=element image { Name, TimeScheme?, Transform?, ImageData+, Meta* } # image definition
+Array= element array { Name, Shape?, DimOrder?, Type?, Format?, Offset?, Filename?, Sep?, text } # array definition

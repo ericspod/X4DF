@@ -1,0 +1,313 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<grammar xmlns="http://relaxng.org/ns/structure/1.0" datatypeLibrary="http://www.w3.org/2001/XMLSchema-datatypes">
+  <start>
+    <element name="x4df">
+      <zeroOrMore>
+        <choice>
+          <ref name="Meta"/>
+          <ref name="Mesh"/>
+          <ref name="Image"/>
+          <ref name="Array"/>
+        </choice>
+      </zeroOrMore>
+    </element>
+  </start>
+  <define name="Name">
+    <attribute name="name"/>
+  </define>
+  <!-- component name -->
+  <define name="Src">
+    <attribute name="src"/>
+  </define>
+  <!-- source array name -->
+  <define name="Val">
+    <attribute name="val"/>
+  </define>
+  <!-- metadata value as attribute -->
+  <define name="Shape">
+    <attribute name="shape"/>
+  </define>
+  <!-- array shape -->
+  <define name="Timestep">
+    <attribute name="timestep">
+      <data type="double"/>
+    </attribute>
+  </define>
+  <!-- timestep for node/field def -->
+  <define name="Start">
+    <attribute name="start">
+      <data type="double"/>
+    </attribute>
+  </define>
+  <!-- start time -->
+  <define name="Step">
+    <attribute name="step">
+      <data type="double"/>
+    </attribute>
+  </define>
+  <!-- time increment -->
+  <define name="DimOrder">
+    <attribute name="dimorder"/>
+  </define>
+  <!-- ordering of X, Y, Z, T, C, N dimension descriptors -->
+  <define name="Type">
+    <attribute name="type"/>
+  </define>
+  <!-- array value value, default "double" -->
+  <define name="ElemType">
+    <attribute name="elemtype"/>
+  </define>
+  <!-- element type, ie. GeomOrderBasis def -->
+  <define name="Format">
+    <attribute name="format">
+      <choice>
+        <value>ascii</value>
+        <value>base64</value>
+        <value>base64_gz</value>
+        <value>binary</value>
+        <value>binary_gz</value>
+      </choice>
+    </attribute>
+  </define>
+  <!-- array format -->
+  <define name="Filename">
+    <attribute name="filename"/>
+  </define>
+  <!-- filename storing array data -->
+  <define name="Sep">
+    <attribute name="sep"/>
+  </define>
+  <!-- array element separator character(s) -->
+  <define name="TopoName">
+    <attribute name="toponame"/>
+  </define>
+  <!-- field topology name -->
+  <define name="Spatial">
+    <attribute name="spatial"/>
+  </define>
+  <!-- name of spatial topology field is for -->
+  <define name="FieldType">
+    <attribute name="fieldtype">
+      <choice>
+        <value>node</value>
+        <value>elem</value>
+        <value>index</value>
+      </choice>
+    </attribute>
+  </define>
+  <!--  per-node, per-element, or per-topology index field -->
+  <define name="Offset">
+    <attribute name="offset">
+      <data type="integer"/>
+    </attribute>
+  </define>
+  <!-- array offset value, skip rows for text, bytes for binary -->
+  <define name="InitialNodes">
+    <attribute name="initialnodes"/>
+  </define>
+  <!-- initial node array for displacement node sets -->
+  <define name="anyElement">
+    <element>
+      <anyName/>
+      <zeroOrMore>
+        <attribute>
+          <anyName/>
+        </attribute>
+      </zeroOrMore>
+      <mixed>
+        <zeroOrMore>
+          <ref name="anyElement"/>
+        </zeroOrMore>
+      </mixed>
+    </element>
+  </define>
+  <!-- matches any xml -->
+  <define name="Position">
+    <element name="position">
+      <text/>
+    </element>
+  </define>
+  <define name="RMatrix">
+    <element name="rmatrix">
+      <text/>
+    </element>
+  </define>
+  <define name="Scale">
+    <element name="scale">
+      <text/>
+    </element>
+  </define>
+  <define name="Transform">
+    <element name="transform">
+      <optional>
+        <ref name="Position"/>
+      </optional>
+      <optional>
+        <ref name="RMatrix"/>
+      </optional>
+      <optional>
+        <ref name="Scale"/>
+      </optional>
+    </element>
+  </define>
+  <!-- 3D transform definition -->
+  <define name="Meta">
+    <element name="meta">
+      <ref name="Name"/>
+      <optional>
+        <ref name="Val"/>
+      </optional>
+      <mixed>
+        <zeroOrMore>
+          <choice>
+            <ref name="Meta"/>
+            <ref name="anyElement"/>
+          </choice>
+        </zeroOrMore>
+      </mixed>
+    </element>
+  </define>
+  <!-- metadata containing arbitrary sub-elements -->
+  <define name="Topology">
+    <element name="topology">
+      <ref name="Name"/>
+      <ref name="Src"/>
+      <optional>
+        <ref name="ElemType"/>
+      </optional>
+      <optional>
+        <ref name="Spatial"/>
+      </optional>
+      <zeroOrMore>
+        <ref name="Meta"/>
+      </zeroOrMore>
+    </element>
+  </define>
+  <!-- mesh topology definition -->
+  <define name="Nodes">
+    <element name="nodes">
+      <ref name="Src"/>
+      <optional>
+        <ref name="InitialNodes"/>
+      </optional>
+      <optional>
+        <ref name="Timestep"/>
+      </optional>
+      <zeroOrMore>
+        <ref name="Meta"/>
+      </zeroOrMore>
+    </element>
+  </define>
+  <!-- mesh nodes definition -->
+  <define name="Field">
+    <element name="field">
+      <ref name="Name"/>
+      <ref name="Src"/>
+      <optional>
+        <ref name="Timestep"/>
+      </optional>
+      <optional>
+        <ref name="TopoName"/>
+      </optional>
+      <optional>
+        <ref name="Spatial"/>
+      </optional>
+      <optional>
+        <ref name="FieldType"/>
+      </optional>
+      <zeroOrMore>
+        <ref name="Meta"/>
+      </zeroOrMore>
+    </element>
+  </define>
+  <!-- mesh field definition -->
+  <define name="ImageData">
+    <element name="imagedata">
+      <ref name="Src"/>
+      <optional>
+        <ref name="Timestep"/>
+      </optional>
+      <optional>
+        <ref name="Transform"/>
+      </optional>
+      <zeroOrMore>
+        <ref name="Meta"/>
+      </zeroOrMore>
+    </element>
+  </define>
+  <!-- image data definition -->
+  <define name="TimeScheme">
+    <element name="timescheme">
+      <ref name="Start"/>
+      <ref name="Step"/>
+    </element>
+  </define>
+  <!-- time scheme definition for time-dependent meshes or images -->
+  <define name="Mesh">
+    <element name="mesh">
+      <ref name="Name"/>
+      <optional>
+        <ref name="TimeScheme"/>
+      </optional>
+      <oneOrMore>
+        <ref name="Nodes"/>
+      </oneOrMore>
+      <zeroOrMore>
+        <ref name="Topology"/>
+      </zeroOrMore>
+      <zeroOrMore>
+        <ref name="Field"/>
+      </zeroOrMore>
+      <zeroOrMore>
+        <ref name="Meta"/>
+      </zeroOrMore>
+    </element>
+  </define>
+  <!-- mesh definition -->
+  <define name="Image">
+    <element name="image">
+      <ref name="Name"/>
+      <optional>
+        <ref name="TimeScheme"/>
+      </optional>
+      <optional>
+        <ref name="Transform"/>
+      </optional>
+      <oneOrMore>
+        <ref name="ImageData"/>
+      </oneOrMore>
+      <zeroOrMore>
+        <ref name="Meta"/>
+      </zeroOrMore>
+    </element>
+  </define>
+  <!-- image definition -->
+  <define name="Array">
+    <element name="array">
+      <ref name="Name"/>
+      <optional>
+        <ref name="Shape"/>
+      </optional>
+      <optional>
+        <ref name="DimOrder"/>
+      </optional>
+      <optional>
+        <ref name="Type"/>
+      </optional>
+      <optional>
+        <ref name="Format"/>
+      </optional>
+      <optional>
+        <ref name="Offset"/>
+      </optional>
+      <optional>
+        <ref name="Filename"/>
+      </optional>
+      <optional>
+        <ref name="Sep"/>
+      </optional>
+      <text/>
+    </element>
+  </define>
+</grammar>
+<!-- array definition -->

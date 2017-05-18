@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+  <xs:element name="x4df">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element ref="meta"/>
+        <xs:element ref="mesh"/>
+        <xs:element ref="image"/>
+        <xs:element ref="array"/>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+  <xs:attributeGroup name="Name">
+    <xs:attribute name="name" use="required"/>
+  </xs:attributeGroup>
+  <!-- component name -->
+  <xs:attributeGroup name="Src">
+    <xs:attribute name="src" use="required"/>
+  </xs:attributeGroup>
+  <!-- source array name -->
+  <xs:attributeGroup name="Val">
+    <xs:attribute name="val" use="required"/>
+  </xs:attributeGroup>
+  <!-- metadata value as attribute -->
+  <xs:attributeGroup name="Shape">
+    <xs:attribute name="shape" use="required"/>
+  </xs:attributeGroup>
+  <!-- array shape -->
+  <xs:attributeGroup name="Timestep">
+    <xs:attribute name="timestep" use="required" type="xs:double"/>
+  </xs:attributeGroup>
+  <!-- timestep for node/field def -->
+  <xs:attributeGroup name="Start">
+    <xs:attribute name="start" use="required" type="xs:double"/>
+  </xs:attributeGroup>
+  <!-- start time -->
+  <xs:attributeGroup name="Step">
+    <xs:attribute name="step" use="required" type="xs:double"/>
+  </xs:attributeGroup>
+  <!-- time increment -->
+  <xs:attributeGroup name="DimOrder">
+    <xs:attribute name="dimorder" use="required"/>
+  </xs:attributeGroup>
+  <!-- ordering of X, Y, Z, T, C, N dimension descriptors -->
+  <xs:attributeGroup name="Type">
+    <xs:attribute name="type" use="required"/>
+  </xs:attributeGroup>
+  <!-- array value value, default "double" -->
+  <xs:attributeGroup name="ElemType">
+    <xs:attribute name="elemtype" use="required"/>
+  </xs:attributeGroup>
+  <!-- element type, ie. GeomOrderBasis def -->
+  <xs:attributeGroup name="Format">
+    <xs:attribute name="format" use="required">
+      <xs:simpleType>
+        <xs:restriction base="xs:token">
+          <xs:enumeration value="ascii"/>
+          <xs:enumeration value="base64"/>
+          <xs:enumeration value="base64_gz"/>
+          <xs:enumeration value="binary"/>
+          <xs:enumeration value="binary_gz"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+  </xs:attributeGroup>
+  <!-- array format -->
+  <xs:attributeGroup name="Filename">
+    <xs:attribute name="filename" use="required"/>
+  </xs:attributeGroup>
+  <!-- filename storing array data -->
+  <xs:attributeGroup name="Sep">
+    <xs:attribute name="sep" use="required"/>
+  </xs:attributeGroup>
+  <!-- array element separator character(s) -->
+  <xs:attributeGroup name="TopoName">
+    <xs:attribute name="toponame" use="required"/>
+  </xs:attributeGroup>
+  <!-- field topology name -->
+  <xs:attributeGroup name="Spatial">
+    <xs:attribute name="spatial" use="required"/>
+  </xs:attributeGroup>
+  <!-- name of spatial topology field is for -->
+  <xs:attributeGroup name="FieldType">
+    <xs:attribute name="fieldtype" use="required">
+      <xs:simpleType>
+        <xs:restriction base="xs:token">
+          <xs:enumeration value="node"/>
+          <xs:enumeration value="elem"/>
+          <xs:enumeration value="index"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+  </xs:attributeGroup>
+  <!--  per-node, per-element, or per-topology index field -->
+  <xs:attributeGroup name="Offset">
+    <xs:attribute name="offset" use="required" type="xs:integer"/>
+  </xs:attributeGroup>
+  <!-- array offset value, skip rows for text, bytes for binary -->
+  <xs:attributeGroup name="InitialNodes">
+    <xs:attribute name="initialnodes" use="required"/>
+  </xs:attributeGroup>
+  <!-- initial node array for displacement node sets -->
+  <xs:group name="anyElement">
+    <xs:sequence>
+      <xs:any processContents="skip"/>
+    </xs:sequence>
+  </xs:group>
+  <!-- matches any xml -->
+  <xs:element name="position" type="xs:string"/>
+  <xs:element name="rmatrix" type="xs:string"/>
+  <xs:element name="scale" type="xs:string"/>
+  <xs:element name="transform">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" ref="position"/>
+        <xs:element minOccurs="0" ref="rmatrix"/>
+        <xs:element minOccurs="0" ref="scale"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <!-- 3D transform definition -->
+  <xs:element name="meta">
+    <xs:complexType mixed="true">
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element ref="meta"/>
+        <xs:group ref="anyElement"/>
+      </xs:choice>
+      <xs:attributeGroup ref="Name"/>
+      <xs:attribute name="val"/>
+    </xs:complexType>
+  </xs:element>
+  <!-- metadata containing arbitrary sub-elements -->
+  <xs:element name="topology">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="meta"/>
+      </xs:sequence>
+      <xs:attributeGroup ref="Name"/>
+      <xs:attributeGroup ref="Src"/>
+      <xs:attribute name="elemtype"/>
+      <xs:attribute name="spatial"/>
+    </xs:complexType>
+  </xs:element>
+  <!-- mesh topology definition -->
+  <xs:element name="nodes">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="meta"/>
+      </xs:sequence>
+      <xs:attributeGroup ref="Src"/>
+      <xs:attribute name="initialnodes"/>
+      <xs:attribute name="timestep" type="xs:double"/>
+    </xs:complexType>
+  </xs:element>
+  <!-- mesh nodes definition -->
+  <xs:element name="field">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="meta"/>
+      </xs:sequence>
+      <xs:attributeGroup ref="Name"/>
+      <xs:attributeGroup ref="Src"/>
+      <xs:attribute name="timestep" type="xs:double"/>
+      <xs:attribute name="toponame"/>
+      <xs:attribute name="spatial"/>
+      <xs:attribute name="fieldtype">
+        <xs:simpleType>
+          <xs:restriction base="xs:token">
+            <xs:enumeration value="node"/>
+            <xs:enumeration value="elem"/>
+            <xs:enumeration value="index"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+  <!-- mesh field definition -->
+  <xs:element name="imagedata">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" ref="transform"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="meta"/>
+      </xs:sequence>
+      <xs:attributeGroup ref="Src"/>
+      <xs:attribute name="timestep" type="xs:double"/>
+    </xs:complexType>
+  </xs:element>
+  <!-- image data definition -->
+  <xs:element name="timescheme">
+    <xs:complexType>
+      <xs:attributeGroup ref="Start"/>
+      <xs:attributeGroup ref="Step"/>
+    </xs:complexType>
+  </xs:element>
+  <!-- time scheme definition for time-dependent meshes or images -->
+  <xs:element name="mesh">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" ref="timescheme"/>
+        <xs:element maxOccurs="unbounded" ref="nodes"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="topology"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="field"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="meta"/>
+      </xs:sequence>
+      <xs:attributeGroup ref="Name"/>
+    </xs:complexType>
+  </xs:element>
+  <!-- mesh definition -->
+  <xs:element name="image">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" ref="timescheme"/>
+        <xs:element minOccurs="0" ref="transform"/>
+        <xs:element maxOccurs="unbounded" ref="imagedata"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="meta"/>
+      </xs:sequence>
+      <xs:attributeGroup ref="Name"/>
+    </xs:complexType>
+  </xs:element>
+  <!-- image definition -->
+  <xs:element name="array">
+    <xs:complexType mixed="true">
+      <xs:attributeGroup ref="Name"/>
+      <xs:attribute name="shape"/>
+      <xs:attribute name="dimorder"/>
+      <xs:attribute name="type"/>
+      <xs:attribute name="format">
+        <xs:simpleType>
+          <xs:restriction base="xs:token">
+            <xs:enumeration value="ascii"/>
+            <xs:enumeration value="base64"/>
+            <xs:enumeration value="base64_gz"/>
+            <xs:enumeration value="binary"/>
+            <xs:enumeration value="binary_gz"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="offset" type="xs:integer"/>
+      <xs:attribute name="filename"/>
+      <xs:attribute name="sep"/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
+<!-- array definition -->
