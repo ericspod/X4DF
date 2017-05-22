@@ -7,10 +7,10 @@
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -18,6 +18,49 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+
+'''
+This module implements the X4DF IO routines and simple data structures. This is
+all that's necessary to read and write X4DF files. The two important functions
+for the user are:
+
+readFile(obj_or_path):
+	Read a X4DF file and return its data structure. The single argument
+	is either a path to a file, a string containing the file data, or
+	a file-like object which can be read to create the data structure.
+
+writeFile(obj,obj_or_path,overwriteFiles=True):
+	Write the data structure `obj' to `obj_or_path' which is either a
+	path to a file or a file-like object the data is to be written into.
+	If `overwriteFiles' is True then array files will be overwritten if
+	necessary, otherwise array files are left untouched.
+
+The data structure readFile() returns and writeFile() accepts is defined
+by a set of record types with these mutable members:
+
+x4df -- meshes images arrays meta
+meta -- name val text children
+nodes -- src initialnodes timestep meta
+topology -- name src elemtype spatial meta
+field -- name src timestep topology spatial fieldtype meta
+imagedata -- src timestep transform meta
+mesh -- name timescheme nodes topologies fields meta
+image -- name timescheme transform imagedata meta
+transform -- position rmatrix scale
+array -- name shape dimorder type format offset filename data
+
+The members of these types correspond to attributes and elements of the XML
+definition for X4DF files. Optional attributes/elements will be None if not
+present when reading and omitted if None when writing. Elements which occur
+multiple times will always be represented by a list (which may be empty).
+
+For example, "readFile('foo.x4df')" will return a x4df instance which `meshes'
+contains a list of mesh instances, an `images' member containing a list of
+`image' instance, an `arrays' member containing a list of `array' instances,
+and a `meta' member containing a list of `meta' instances.
+
+'''
+
 
 import xml.etree.ElementTree as ET
 from collections import OrderedDict
@@ -73,7 +116,7 @@ idTransform=transform(np.array([0,0,0]),np.eye(3),np.array([1,1,1]))
 
 def isIDTransform(obj):
 	'''Returns True if `obj' is a transform object equivalent to the identity.'''
-	return np.all(obj.position==idTransform.position) and np.all(obj.scale==idTransform.scale) and np.all(obj.rmatrix==idTransform.rmatrix)
+	return obj and np.all(obj.position==idTransform.position) and np.all(obj.scale==idTransform.scale) and np.all(obj.rmatrix==idTransform.rmatrix)
 
 
 ### Reading XML Functions
@@ -120,12 +163,14 @@ def readTimescheme(tree):
 
 def readTransform(tree):
 	'''Read a transform element into a transform object.'''
-	pos,mat,scl=idTransform
+	if tree is None:
+		return None
 
-	if tree is not None:
-		pos=parseNumString(tree.findtext('position','0 0 0'))
-		mat=parseNumString(tree.findtext('rmatrix','1 0 0 0 1 0 0 0 1'))
-		scl=parseNumString(tree.findtext('scale','1 1 1'))
+#	pos,mat,scl=idTransform
+#	if tree is not None:
+	pos=parseNumString(tree.findtext('position','0 0 0'))
+	mat=parseNumString(tree.findtext('rmatrix','1 0 0 0 1 0 0 0 1'))
+	scl=parseNumString(tree.findtext('scale','1 1 1'))
 
 	return transform(pos,mat,scl)
 
@@ -294,8 +339,10 @@ def toNumString(arr,dtype=float):
 
 def reshape2D(arr):
 	shape=arr.shape
-	if len(shape)>2:
-		return arr.reshape((sum(shape)/shape[1],shape[1]))
+	if len(shape)==1:
+		return arr.reshape((arr.shape,1))
+	elif len(shape)>2:
+		return arr.reshape((np.prod(shape)/shape[1],shape[1]))
 	else:
 		return arr
 
@@ -321,7 +368,7 @@ def writeMeta(obj,stream):
 
 def writeTransform(obj,stream):
 	'''Write a transform object to XML.'''
-	if not isIDTransform(obj):
+	if obj:
 		with XMLStream.tag(stream,'transform') as o:
 			with XMLStream.tag(o,'position',newlines=False):
 				o.write(toNumString(obj.position))
@@ -378,8 +425,7 @@ def writeImage(obj,stream):
 
 			if not isIDTransform(imd.transform) or imd.meta:
 				with XMLStream.tag(o,'imagedata',attrs):
-					if imd.transform:
-						writeTransform(imd.transform,o)
+					writeTransform(imd.transform,o)
 
 					for m in imd.meta:
 						writeMeta(m,o)
@@ -440,14 +486,13 @@ def writeArray(obj,stream,basepath='.',overwriteFile=True):
 				o.writeline(line.strip())
 
 
-def writeFile(obj,obj_or_path=None,overwriteFiles=True):
+def writeFile(obj,obj_or_path,overwriteFiles=True):
 	'''Write the x4df object to the path or file-like object `obj_or_path'. Data files are overwritten if `overwriteFiles'.'''
 	basepath=os.path.dirname(obj_or_path) if isinstance(obj_or_path,str) else os.getcwd()
 	stream=obj_or_path
 
 	if isinstance(obj_or_path,str):
 		stream=open(obj_or_path,'w')
-
 	try:
 		stream.write('<?xml version="1.0" encoding="UTF-8"?>\n')
 
