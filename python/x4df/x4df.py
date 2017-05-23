@@ -434,7 +434,7 @@ def writeImage(obj,stream):
 
 
 def writeArrayData(data,type_,format_):
-	'''Returns a formatted string for the numpy array `data' containing values of type `type_' with format `format_'.'''
+	'''Returns a string with format `format_' for the numpy array `data' containing values of type `type_'.'''
 	dtype_=parseType(type_)
 	out=StringIO('')
 
@@ -444,7 +444,7 @@ def writeArrayData(data,type_,format_):
 	else:
 		dat=data.astype(dtype_).tostring()
 		if format_ in (validFormats[2],validFormats[4]):
-			gzip.GzipFile(fileobj=out,mode='wb').write(dat)
+			gzip.GzipFile(fileobj=out,mode='wb',compresslevel=6).write(dat)
 			dat=out.getvalue()
 
 		if format_ in validFormats[1:3]:
