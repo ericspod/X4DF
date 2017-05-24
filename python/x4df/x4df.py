@@ -38,26 +38,30 @@ writeFile(obj,obj_or_path,overwriteFiles=True):
 The data structure readFile() returns and writeFile() accepts is defined
 by a set of record types with these mutable members:
 
-x4df -- meshes images arrays meta
-meta -- name val text children
-nodes -- src initialnodes timestep meta
-topology -- name src elemtype spatial meta
-field -- name src timestep topology spatial fieldtype meta
-imagedata -- src timestep transform meta
-mesh -- name timescheme nodes topologies fields meta
-image -- name timescheme transform imagedata meta
-transform -- position rmatrix scale
-array -- name shape dimorder type format offset filename data
+	x4df      -- meshes images arrays meta
+	meta      -- name val text children
+	nodes     -- src initialnodes timestep meta
+	topology  -- name src elemtype spatial meta
+	field     -- name src timestep topology spatial fieldtype meta
+	imagedata -- src timestep transform meta
+	mesh      -- name timescheme nodes topologies fields meta
+	image     -- name timescheme transform imagedata meta
+	transform -- position rmatrix scale
+	array     -- name shape dimorder type format offset filename data
 
 The members of these types correspond to attributes and elements of the XML
 definition for X4DF files. Optional attributes/elements will be None if not
 present when reading and omitted if None when writing. Elements which occur
-multiple times will always be represented by a list (which may be empty).
+multiple times will always be represented by a list (which may be empty). The
+value the non-list members store is either a single number of a string storing
+the value for that attribute/element, with the exception of "timescheme" which
+is a tuple of 2 numbers (start, step) and the members of "transform" which are
+numpy arrays representing 3-vectors or a 3x3 matrix.
 
 For example, "readFile('foo.x4df')" will return a x4df instance which `meshes'
 contains a list of mesh instances, an `images' member containing a list of
 `image' instance, an `arrays' member containing a list of `array' instances,
-and a `meta' member containing a list of `meta' instances.
+and a `metas' member containing a list of `meta' instances.
 
 '''
 
@@ -93,22 +97,34 @@ def namedrecord(name,members):
 	return type(name,(),tmembers)
 
 
-x4df=namedrecord('x4df','meshes images arrays meta')
+x4df=namedrecord('x4df','meshes images arrays metas')
 meta=namedrecord('meta','name val text children')
-nodes=namedrecord('nodes','src initialnodes timestep meta')
-topology=namedrecord('topology','name src elemtype spatial meta')
-field=namedrecord('field','name src timestep topology spatial fieldtype meta')
-imagedata=namedrecord('imagedata','src timestep transform meta')
-mesh=namedrecord('mesh','name timescheme nodes topologies fields meta')
-image=namedrecord('image','name timescheme transform imagedata meta')
+nodes=namedrecord('nodes','src initialnodes timestep metas')
+topology=namedrecord('topology','name src elemtype spatial metas')
+field=namedrecord('field','name src timestep topology spatial fieldtype metas')
+imagedata=namedrecord('imagedata','src timestep transform metas')
+mesh=namedrecord('mesh','name timescheme nodes topologies fields metas')
+image=namedrecord('image','name timescheme transform imagedata metas')
 transform=namedrecord('transform','position rmatrix scale')
 array=namedrecord('array','name shape dimorder type format offset filename data')
 
-# valid array formats
-validFormats=('ascii', 'base64', 'base64_gz', 'binary', 'binary_gz')
+# valid array format names
+ASCII='ascii' # ascii text containing whitespace-separated numbers
+BASE64='base64' # base64 encoding of array binary data
+BASE64_GZ='base64_gz' # base64 encoding of gzip compressed array binary data
+BINARY='binary' # array binary data
+BINARY_GZ='binary_gz' # gzip compressed array binary data
 
-# valid field types: node=per node, elem=per element, index=per index in topology
-validFieldTypes=('node','elem','index')
+# valid array formats
+validFormats=(ASCII, BASE64, BASE64_GZ, BINARY, BINARY_GZ)
+
+# valid field type names
+NODE='node' # per node field
+ELEM='elem' # per element field
+INDEX='index' # per topology index field
+
+# valid field types
+validFieldTypes=(NODE, ELEM, INDEX)
 
 # identity transform object
 idTransform=transform(np.array([0,0,0]),np.eye(3),np.array([1,1,1]))
@@ -226,7 +242,7 @@ def readArrayData(shape,dimorder,type_,format_,offset, fullfilename,sep,text):
 
 	dtype_=parseType(type_)
 
-	if format_==validFormats[0]: # ascii
+	if format_==ASCII:
 		arr=np.loadtxt(fullfilename or StringIO(text),dtype_,skiprows=offset,delimiter=sep)
 	else:
 		# read the data from the file or refer to the text
@@ -236,11 +252,11 @@ def readArrayData(shape,dimorder,type_,format_,offset, fullfilename,sep,text):
 			dat=dat[offset:]
 
 		# decode the base64 data stored in the file or the text
-		if format_ in validFormats[1:3]:
+		if format_ in (BASE64,BASE64_GZ):
 			dat=base64.decodestring(dat)
 
 		# decompress the data using gzip
-		if format_ in (validFormats[2],validFormats[4]):
+		if format_ in (BASE64_GZ,BINARY_GZ):
 			dat=gzip.GzipFile(fileobj=StringIO(dat)).read() # RFC 1952
 
 		arr=np.frombuffer(dat,dtype=dtype_)
@@ -385,28 +401,27 @@ def writeMesh(obj,stream):
 			attrs=OrderedDict((k,v) for k,v in attrs.items() if v is not None)
 			if meta:
 				with XMLStream.tag(o,name,attrs):
-					for m in t.meta:
+					for m in t.metas:
 						writeMeta(m,o)
 			else:
 				o.element(name,attrs)
-
 
 		if obj.timescheme:
 			o.element('timescheme',{'start':obj.timescheme[0],'step':obj.timescheme[1]})
 
 		for n in obj.nodes:
 			attrs=OrderedDict([('src',n.src),('initialnodes',n.initialnodes),('timestep',n.timestep)])
-			_writetag('nodes',attrs,n.meta)
+			_writetag('nodes',attrs,n.metas)
 
 		for t in obj.topologies:
 			attrs=OrderedDict([('name',t.name),('src',t.src),('elemtype',t.elemtype),('spatial',t.spatial)])
-			_writetag('topology',attrs,t.meta)
+			_writetag('topology',attrs,t.metas)
 
 		for f in obj.fields:
 			attrs=OrderedDict([('name',f.name),('src',f.src),('timestep',f.timestep),('topology',f.topology),('spatial',f.spatial),('fieldtype',f.fieldtype)])
-			_writetag('field',attrs,f.meta)
+			_writetag('field',attrs,f.metas)
 
-		for m in obj.meta:
+		for m in obj.metas:
 			writeMeta(m,o)
 
 
@@ -423,11 +438,11 @@ def writeImage(obj,stream):
 			if imd.timestep:
 				attrs['timestep']=imd.timestep
 
-			if not isIDTransform(imd.transform) or imd.meta:
+			if not isIDTransform(imd.transform) or imd.metas:
 				with XMLStream.tag(o,'imagedata',attrs):
 					writeTransform(imd.transform,o)
 
-					for m in imd.meta:
+					for m in imd.metas:
 						writeMeta(m,o)
 			else:
 				o.element('imagedata',attrs)
@@ -437,13 +452,14 @@ def writeArrayData(data,type_,format_):
 	'''Returns a string with format `format_' for the numpy array `data' containing values of type `type_'.'''
 	dtype_=parseType(type_)
 	out=StringIO('')
+	assert format_ in validFormats
 
-	if format_==validFormats[0]:
+	if format_==ASCII:
 		np.savetxt(out,reshape2D(data),fmt='%s')
 		dat=out.getvalue()
 	else:
 		dat=data.astype(dtype_).tostring()
-		if format_ in (validFormats[2],validFormats[4]):
+		if format_ in (BASE64,BASE64_GZ):
 			gzip.GzipFile(fileobj=out,mode='wb',compresslevel=6).write(dat)
 			dat=out.getvalue()
 
@@ -474,7 +490,7 @@ def writeArray(obj,stream,basepath='.',overwriteFile=True):
 		filename=os.path.join(basepath,obj.filename)
 
 		if overwriteFile or not os.path.isfile(filename):
-			with open(filename,'wb' if obj.format in validFormats[3:] else 'w') as o:
+			with open(filename,'wb' if obj.format in (BASE64_GZ,BINARY_GZ) else 'w') as o:
 				o.write(dat)
 		elif obj.offset:
 			attrs['offset']=obj.offset # add the offset value for an existing file that isn't being overwritten
@@ -493,6 +509,7 @@ def writeFile(obj,obj_or_path,overwriteFiles=True):
 
 	if isinstance(obj_or_path,str):
 		stream=open(obj_or_path,'w')
+
 	try:
 		stream.write('<?xml version="1.0" encoding="UTF-8"?>\n')
 
@@ -506,7 +523,7 @@ def writeFile(obj,obj_or_path,overwriteFiles=True):
 			for array in obj.arrays:
 				writeArray(array,ostream,basepath,overwriteFiles)
 
-			for metav in obj.meta:
+			for metav in obj.metas:
 				writeMeta(metav,ostream)
 	finally:
 		if isinstance(obj_or_path,str):
