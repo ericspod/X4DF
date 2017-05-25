@@ -2,7 +2,7 @@
 # X4DF
 # Copyright (C) 2017 Eric Kerfoot, King's College London, all rights reserved
 
-from .x4df import readFile, writeFile, idTransform, validFieldTypes, ASCII, BASE64, BASE64_GZ, BINARY, BINARY_GZ
+from .x4df import readFile, writeFile, idTransform, validFieldTypes, ASCII, BASE64, BASE64_GZ, BINARY, BINARY_GZ, NODE, ELEM, INDEX
 from .x4df import x4df, meta, nodes, topology, field, imagedata, mesh, image, transform,array
 
 __appname__='x4df'
