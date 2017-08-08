@@ -38,7 +38,7 @@ writeFile(obj,obj_or_path,overwriteFiles=True):
 The data structure readFile() returns and writeFile() accepts is defined
 by a set of record types with these mutable members:
 
-    x4df      -- meshes images arrays meta
+    dataset   -- meshes images arrays meta
     meta      -- name val text children
     nodes     -- src initialnodes timestep meta
     topology  -- name src elemtype spatial meta
@@ -58,7 +58,7 @@ the value for that attribute/element, with the exception of "timescheme" which
 is a tuple of 2 numbers (start, step) and the members of "transform" which are
 numpy arrays representing 3-vectors or a 3x3 matrix.
 
-For example, "readFile('foo.x4df')" will return a x4df instance which `meshes'
+For example, "readFile('foo.x4df')" will return a dataset instance which `meshes'
 contains a list of mesh instances, an `images' member containing a list of
 `image' instance, an `arrays' member containing a list of `array' instances,
 and a `metas' member containing a list of `meta' instances.
@@ -74,9 +74,6 @@ import base64
 import gzip
 import contextlib
 import numpy as np
-
-from functools import wraps
-import sys, time
 
 ### Types and Definitions
 
@@ -100,7 +97,7 @@ def namedrecord(name,members):
     return type(name,(),tmembers)
 
 
-x4df=namedrecord('x4df','meshes images arrays metas')
+dataset=namedrecord('dataset','meshes images arrays metas')
 meta=namedrecord('meta','name val text children')
 nodes=namedrecord('nodes','src initialnodes timestep metas')
 topology=namedrecord('topology','name src elemtype spatial metas')
@@ -293,7 +290,7 @@ def readArray(arr,basepath='.'):
 
 
 def readFile(obj_or_path):
-    '''Read the file path or file-like object `obj_or_path' into a x4df object.'''
+    '''Read the file path or file-like object `obj_or_path' into a dataset object.'''
     basepath='.'
     if isinstance(obj_or_path,str):
         if os.path.isfile(obj_or_path):
@@ -307,7 +304,7 @@ def readFile(obj_or_path):
     arrays=[readArray(a,basepath) for a in root.findall('array')]
     metas=readMeta(root.findall('meta'))
 
-    return x4df(meshes, images, arrays, metas)
+    return dataset(meshes, images, arrays, metas)
 
 ### Writing XML Functions
 

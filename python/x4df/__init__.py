@@ -3,7 +3,7 @@
 # Copyright (C) 2017 Eric Kerfoot, King's College London, all rights reserved
 
 from .x4df import readFile, writeFile, idTransform, validFieldTypes, ASCII, BASE64, BASE64_GZ, BINARY, BINARY_GZ, NODE, ELEM, INDEX
-from .x4df import x4df, meta, nodes, topology, field, imagedata, mesh, image, transform,array
+from .x4df import dataset, meta, nodes, topology, field, imagedata, mesh, image, transform, array
 
 __appname__='x4df'
 __version_info__=(0,1,0) # global application version, major/minor/patch
