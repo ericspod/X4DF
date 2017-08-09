@@ -58,11 +58,24 @@ the value for that attribute/element, with the exception of "timescheme" which
 is a tuple of 2 numbers (start, step) and the members of "transform" which are
 numpy arrays representing 3-vectors or a 3x3 matrix.
 
-For example, "readFile('foo.x4df')" will return a dataset instance which `meshes'
+For example, "readFile('foo.x4df')" will return a dataset instance whose `meshes'
 contains a list of mesh instances, an `images' member containing a list of
 `image' instance, an `arrays' member containing a list of `array' instances,
 and a `metas' member containing a list of `meta' instances.
 
+Creating and writing a X4DF document involves creating the data structure and then
+calling `writeFile'. Below is the code to reproduce the one triangle mesh from the
+main README.md file:
+
+    nodes=nodes('nodesmat')
+    topo=topology('tris','trismat','Tri1NL')
+    mesh=mesh('triangle',None,[nodes],[topo])
+    
+    nodear=array('nodesmat',data=np.asarray([(0,0,0),(1,0,0),(0,1,0)]))
+    indar=array('trismat',shape='1 3',type='uint8',data=np.asarray([(1,0,2)]))
+    
+    ds=dataset([mesh],None,[nodear,indar])
+    writeFile(ds,'tri.x4df')
 '''
 
 
@@ -382,6 +395,13 @@ def writeMeta(obj,stream):
                     ET.ElementTree(child).write(stream)
 
 
+def writeMetas(metas,stream):
+    '''Write the meta objects from the iterable `metas' to `stream'. If `metas' is None, do nothing.'''
+    if metas is not None:
+        for m in metas:
+            writeMeta(m,stream)
+
+
 def writeTransform(obj,stream):
     '''Write a transform object to XML.'''
     if obj:
@@ -401,8 +421,7 @@ def writeMesh(obj,stream):
             attrs=OrderedDict((k,v) for k,v in attrs.items() if v is not None)
             if meta:
                 with XMLStream.tag(o,name,attrs):
-                    for m in t.metas:
-                        writeMeta(m,o)
+                    writeMetas(meta,o)
             else:
                 o.element(name,attrs)
 
@@ -413,16 +432,15 @@ def writeMesh(obj,stream):
             attrs=OrderedDict([('src',n.src),('initialnodes',n.initialnodes),('timestep',n.timestep)])
             _writetag('nodes',attrs,n.metas)
 
-        for t in obj.topologies:
+        for t in (obj.topologies or []):
             attrs=OrderedDict([('name',t.name),('src',t.src),('elemtype',t.elemtype),('spatial',t.spatial)])
             _writetag('topology',attrs,t.metas)
 
-        for f in obj.fields:
+        for f in (obj.fields or []):
             attrs=OrderedDict([('name',f.name),('src',f.src),('timestep',f.timestep),('topology',f.topology),('spatial',f.spatial),('fieldtype',f.fieldtype)])
             _writetag('field',attrs,f.metas)
 
-        for m in obj.metas:
-            writeMeta(m,o)
+        writeMetas(obj.metas,o)
 
 
 def writeImage(obj,stream):
@@ -441,20 +459,18 @@ def writeImage(obj,stream):
             if not isIDTransform(imd.transform) or imd.metas:
                 with XMLStream.tag(o,'imagedata',attrs):
                     writeTransform(imd.transform,o)
-
-                    for m in imd.metas:
-                        writeMeta(m,o)
+                    writeMetas(imd.metas,o)
             else:
                 o.element('imagedata',attrs)
 
 
 def writeArrayData(data,type_,format_):
     '''Returns a string with format `format_' for the numpy array `data' containing values of type `type_'.'''
-    dtype_=parseType(type_)
+    dtype_=parseType(type_) if type_ else 'float'
     out=StringIO('')
-    assert format_ in validFormats
+    assert format_ in (None,validFormats)
 
-    if format_==ASCII:
+    if format_ in (None,ASCII):
         np.savetxt(out,reshape2D(data),fmt='%s')
         dat=out.getvalue()
     else:
@@ -514,17 +530,31 @@ def writeFile(obj,obj_or_path,overwriteFiles=True):
         stream.write('<?xml version="1.0" encoding="UTF-8"?>\n')
 
         with XMLStream.tag(stream,'x4df') as ostream:
-            for mesh in obj.meshes:
+            for mesh in (obj.meshes or []):
                 writeMesh(mesh,ostream)
 
-            for image in obj.images:
+            for image in (obj.images or []):
                 writeImage(image,ostream)
 
-            for array in obj.arrays:
+            for array in (obj.arrays or []):
                 writeArray(array,ostream,basepath,overwriteFiles)
 
-            for metav in obj.metas:
-                writeMeta(metav,ostream)
+            writeMetas(obj.metas,ostream)
     finally:
         if isinstance(obj_or_path,str):
             stream.close()
+
+if __name__=='__main__':
+    
+    nodes=nodes('nodesmat')
+    topo=topology('tris','trismat','Tri1NL')
+    mesh=mesh('triangle',None,[nodes],[topo])
+    
+    nodear=array('nodesmat',data=np.asarray([(0,0,0),(1,0,0),(0,1,0)]))
+    indar=array('trismat',shape='1 3',type='uint8',data=np.asarray([(1,0,2)]))
+    
+    ds=dataset([mesh],None,[nodear,indar])
+    
+    s=StringIO()
+    writeFile(ds,s)
+    print s.getvalue()

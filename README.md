@@ -28,6 +28,18 @@ Example storing a mesh with a single triangle:
 </x4df>
 ```
 
+This repository contains the definition of X4DF in terms of semantics in this document, XML definition in the
+`x4df.(rnc,rng,xsd)` files, and basic code library for reading and writing the format. Currently the Python code for IO
+is present but other languages will be added.
+
+An X4DF document is composed of three main elements: mesh elements defining a mesh comprised of node, topology and field 
+information, image elements defining position in space and dimensions, and array elements storing the actual mesh and image
+data. Metadata is used to store arbitrary hierarchical text or XML data, and can be stored in an X4DF element as well as 
+every other element except image elements. The following sections will explain the meaning of the X4DF elements.
+
+## Mesh Definition
+
+## Image Definition
 
 ## Array Definition
 
@@ -48,7 +60,7 @@ The `array` XML element uses these attributes:
  * `sep` (optional) - separator character between elements in `ASCII` format, default is `,`
 
 Array type is specified using the format `[><=]('uint','int','float')('8','16','32','64')` which states endianness, base
-type, and size. For example, an unsigned little endian 16-bit number has type `<uint16`. Endianness is meaningful for binary
+type, and size. For example, an unsigned little endian 16-bit integer has type `<uint16`. Endianness is meaningful for binary
 representation only, where `<` is little endian, `>` is big endian, and `=` is current platform endianness (the default).
 The base types are respectively unsigned integer, signed integer, and floating point. The size is in bits and can be 
 combined with any base type except for `float8`.
@@ -79,9 +91,10 @@ then encoding as base64 text. This allows compressed data to be stored in the te
 ### Array Ordering
 
 As text or binary array values are stored in rightmost index first order, that is to say the rightmost index is the least
-significant. This implies that a text or binary array is flattened to a 1D list of values. Given an n-dimensional 
-array of dimensions `D=(d1,d2...,dn)`, a value at index `I=(i1,i2,....,in)` will be stored in the 1D list at index
-`Sigma(I[i]*Pi(D[i+1:]) for 1<=i<=n)`.
+significant. This implies that a text or binary array is flattened to a 1D list of values. 
+
+Given an n-dimensional  array of dimensions `D=(d1,d2...,dn)`, a value at index `I=(i1,i2,....,in)` will be stored in the 
+1D list at index `Sigma(I[i]*Pi(D[i+1:]) for 1<=i<=n)`.
 
 For example, the array `[[0,1],[2,3]]` with dimensions `(2,2)` is flattened out to the list `(0,1,2,3,4,5,6,7)`. These
 values would then be stored in a chosen data format in binary or as text. 
