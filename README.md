@@ -50,7 +50,7 @@ a separate file.
 
 The `array` XML element uses these attributes:
  * `name` - name of the array, used to reference the array data in other parts of the document
- * `shape` (optional for text only) - shape of the array, a space separated tuple of positive integer values
+ * `shape` (optional for text only) - shape of the array, a space separated tuple of integer values greater than zero
  * `dimorder` (optional) - a text specifier indicating the order dimensions (unused for now)
  * `type` (optional) - type of the array elements, defaults to `float32`
  * `format` (optional) - states the data format, defaults to `ASCII`
@@ -65,7 +65,7 @@ representation only, where `<` is little endian, `>` is big endian, and `=` is c
 The base types are respectively unsigned integer, signed integer, and floating point. The size is in bits and can be 
 combined with any base type except for `float8`.
 
-The shape attribute defines the shape of the array, eg. an array with 3 rows and 2 columns is specified as `3 2`. If the
+The `shape` attribute defines the shape of the array, eg. an array with 3 rows and 2 columns is specified as `3 2`. If the
 data is text then the shape for a 2D array can be inferred by how many lines there are and how many components per line,
 otherwise this attribute is mandatory.
 
@@ -77,16 +77,10 @@ The valid formats for array data are as follows:
  * `BINARY_GZ` - data is stored in binary representation directly, compressed with the gzip algorithm (RFC 1952), this must be in a separate binary file 
 
 Data in any format can be stored in a file, for `BINARY` or `BINARY_GZ` data it is mandatory to be stored as such. When 
-reading data from a file, reading starts from the `offset` line if text or from the `offset` byte otherwise. The use of
-offsets allows multiple arrays to be stored in the same file. If `shape` is not given for text then all the file from 
-the offset will be read. The name of the file is given in `filename` which is typically a path relative to the XML 
-document. 
-
-For the compressed formats the whole file is compressed together, which can be done with the `gzip` command line tool. 
-To read from such a file, it first must be decompressed in its entirety then read from an offset in the resulting data.
-
-Creating base64 data is done by converting the array into its binary representation, compressing if `BASE64_GZ` is used,
-then encoding as base64 text. This allows compressed data to be stored in the text body of a `array` element.
+reading data from a file, reading starts from the `offset` byte if binary or from the `offset` line otherwise. The use of
+offsets allows multiple arrays to be stored in the same file, although all the arrays in a particular file should have the
+same format. If `shape` is not given for text then all the file from the offset will be read. The name of the file is 
+given in `filename` which is typically a path relative to the XML document. 
 
 ### Array Ordering
 
@@ -96,7 +90,7 @@ significant. This implies that a text or binary array is flattened to a 1D list 
 Given an n-dimensional  array of dimensions `D=(d1,d2...,dn)`, a value at index `I=(i1,i2,....,in)` will be stored in the 
 1D list at index `Sigma(I[i]*Pi(D[i+1:]) for 1<=i<=n)`.
 
-For example, the array `[[0,1],[2,3]]` with dimensions `(2,2)` is flattened out to the list `(0,1,2,3,4,5,6,7)`. These
+For example, the array `[[0,1],[2,3]]` with dimensions `(2,2)` is flattened out to the list `(0,1,2,3)`. These
 values would then be stored in a chosen data format in binary or as text. 
 
 ### Text Array
@@ -125,3 +119,10 @@ values in the depth or time dimention get stored first.
 
 ### Binary Array
 
+Storing array data in binary  
+
+For the compressed formats the whole file is compressed together, which can be done with the `gzip` command line tool. 
+To read from such a file, it first must be decompressed in its entirety then read from an offset in the resulting data.
+
+Creating base64 data is done by converting the array into its binary representation, compressing if `BASE64_GZ` is used,
+then encoding as base64 text. This allows compressed data to be stored in the text body of a `array` element.
