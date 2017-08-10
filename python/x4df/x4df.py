@@ -475,7 +475,7 @@ def writeArrayData(data,type_,format_):
         dat=out.getvalue()
     else:
         dat=data.astype(dtype_).tostring()
-        if format_ in (BINARY_GZ,BASE64_GZ):
+        if format_ in (BINARY_GZ,BASE64_GZ): # TODO: not implementing spec as this assumes only one array per file
             gzip.GzipFile(fileobj=out,mode='wb',compresslevel=6).write(dat)
             dat=out.getvalue()
 
@@ -502,7 +502,7 @@ def writeArray(obj,stream,basepath='.',overwriteFile=True):
 
     dat=writeArrayData(obj.data,obj.type,obj.format)
 
-    if obj.filename:
+    if obj.filename: # TODO: not implementing spec correctly for writing multiple arrays to a file
         filename=os.path.join(basepath,obj.filename)
 
         if overwriteFile or not os.path.isfile(filename):
