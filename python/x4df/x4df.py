@@ -482,10 +482,6 @@ def writeArrayData(data,type_,format_):
         dat=out.getvalue()
     else:
         dat=data.astype(dtype_).tostring()
-#        if format_ in (BINARY_GZ,BASE64_GZ): # TODO: not implementing spec as this assumes only one array per file
-#            gzip.GzipFile(fileobj=out,mode='wb',compresslevel=6).write(dat)
-#            dat=out.getvalue()
-
         if format_ in (BASE64, BASE64_GZ):
             dat=base64.b64encode(dat)
 
@@ -533,14 +529,6 @@ def writeArray(obj,stream,basepath,appendFile,overwriteFile):
                     
         attrs['offset']=obj.offset
             
-
-#        # TODO: not implementing spec correctly for writing multiple arrays to a file
-#        if overwriteFile or not os.path.isfile(filename):
-#            with open(filename,'wb' if obj.format in (BASE64_GZ,BINARY_GZ) else 'w') as o:
-#                o.write(dat)
-#        elif obj.offset:
-#            attrs['offset']=obj.offset # add the offset value for an existing file that isn't being overwritten
-
         stream.element('array',attrs)
     else:
         with XMLStream.tag(stream,'array',attrs) as o:
