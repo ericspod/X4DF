@@ -37,6 +37,7 @@ from x4df import nodes,topology,mesh,array,dataset,BASE64_GZ,BASE64, writeFile,r
 
 
 def testWrite1():
+    '''Tests writeFile.'''
     nodespec=nodes('nodesmat')
     topo=topology('tris','trismat','Tri1NL')
     meshobj=mesh('triangle',None,[nodespec],[topo])
@@ -50,7 +51,8 @@ def testWrite1():
     writeFile(ds,s)
     
     
-def testWrite2():
+def testWriteRead1():
+    '''Tests applying the results from writeFile to readFile.'''
     nodespec=nodes('nodesmat')
     topo=topology('tris','trismat','Tri1NL')
     meshobj=mesh('triangle',None,[nodespec],[topo])
@@ -64,6 +66,11 @@ def testWrite2():
     writeFile(ds,s)
     s.seek(0)
     readFile(s)
+    
+    
+def testFileRead1():
+    '''Tests reading from a testdata file.'''
+    obj=readFile(os.path.join(testdir,'test.x4df'))
     
     
 nose.runmodule() 
