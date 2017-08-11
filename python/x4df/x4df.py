@@ -159,7 +159,9 @@ def parseNumString(val,dtype=float,sep=' '):
 
 def parseType(type_):
     '''Convert type string into a numpy type with byte ordering.'''
-    if type_[0] in ('>','<','='):
+    if not type_:
+        return np.dtype('float32')
+    elif type_[0] in ('>','<','='):
         return np.dtype(type_[1:]).newbyteorder(type_[0])
     else:
         return np.dtype(type_)
@@ -250,12 +252,12 @@ def readImage(tree):
 
 def readArrayData(shape,dimorder,type_,format_,offset, fullfilename,sep,text):
     '''Read the data for an array from the file `fullfilename' if given otherwise from the `text' string value.'''
-    assert format_ in validFormats
+    assert not format_ or format_ in validFormats
     assert fullfilename or text
     assert fullfilename or format_ not in validFormats[3:5], 'Binary data can only be stored in separate files'
 
     dtype_=parseType(type_)
-    offset=offset or 0
+    offset=int(offset or 0)
     
     if shape is not None:
         shape=parseNumString(shape,int)
@@ -263,7 +265,7 @@ def readArrayData(shape,dimorder,type_,format_,offset, fullfilename,sep,text):
     else:
         length=None
     
-    if format_==ASCII:
+    if format_ in (None,ASCII):
         arr=np.loadtxt(fullfilename or StringIO(text),dtype_,skiprows=offset,delimiter=sep)
     elif fullfilename:
         with open(fullfilename,'rb') as o:
@@ -297,10 +299,10 @@ def readArray(arr,basepath='.'):
     '''Read an array from the array XML element `arr', loading files starting from directory `basepath'.'''
     name=arr.get('name')
     shape=arr.get('shape')
-    dimorder=arr.get('dimorder','')
-    type_=arr.get('type','float')
-    format_=arr.get('format','ascii')
-    offset=arr.get('offset',0)
+    dimorder=arr.get('dimorder')
+    type_=arr.get('type')
+    format_=arr.get('format')
+    offset=arr.get('offset')
     filename=arr.get('filename')
     sep=arr.get('sep')
     text=arr.text
@@ -309,13 +311,17 @@ def readArray(arr,basepath='.'):
     if filename:
         fullfilename=os.path.join(basepath,filename)
 
-    arr=readArrayData(shape,dimorder,type_,format_,int(offset),fullfilename,sep,text)
+    arr=readArrayData(shape,dimorder,type_,format_,offset,fullfilename,sep,text)
 
     return array(name, shape, dimorder, type_, format_, offset, filename, arr)
 
 
 def readFile(obj_or_path):
-    '''Read the file path or file-like object `obj_or_path' into a dataset object.'''
+    '''
+    Read the file path, file-like object, or XML string `obj_or_path' into a dataset object. If the XML parse fails this
+    will raise a xml.etree.ElementTree.ParseError exception. If `obj_or_path' is a string but is not a path to an existing
+    file will be treated as a XML string instead.
+    '''
     basepath='.'
     if isinstance(obj_or_path,str):
         if os.path.isfile(obj_or_path):
@@ -477,11 +483,12 @@ def writeImage(obj,stream):
 
 def writeArrayData(data,type_,format_):
     '''Returns a string with format `format_' for the numpy array `data' containing values of type `type_'.'''
-    dtype_=parseType(type_ if type_ else 'float')
+    dtype_=parseType(type_)
     out=StringIO('')
-    assert format_ is None or format_ in validFormats
+    b64linelen=80
+    format_=format_ if format_ in validFormats else ASCII
 
-    if format_ in (None,ASCII):
+    if format_==ASCII:
         np.savetxt(out,reshape2D(data),fmt='%s')
         dat=out.getvalue()
     else:
@@ -493,6 +500,7 @@ def writeArrayData(data,type_,format_):
         
         if format_ in (BASE64, BASE64_GZ):
             dat=base64.b64encode(dat)
+            dat='\n'.join(dat[i:i+b64linelen] for i in range(0, len(dat), b64linelen))
 
     return dat
 
@@ -575,18 +583,18 @@ def writeFile(obj,obj_or_path,overwriteFiles=True):
             stream.close()
 
 if __name__=='__main__':
-    
-    nodespec=nodes('nodesmat')
-    topo=topology('tris','trismat','Tri1NL')
-    meshobj=mesh('triangle',None,[nodespec],[topo])
-    
-    nodear=array('nodesmat',format=BASE64_GZ,data=np.asarray([(0,0,0),(1,0,0),(0,1,0)]))
-    indar=array('trismat',format=BASE64,shape='1 3',type='uint8',data=np.asarray([(1,0,2)]))
-    
-    ds=dataset([meshobj],None,[nodear,indar])
-    
-    s=StringIO()
-    writeFile(ds,s)
-    print s.getvalue()
-    s.seek(0)
-    print readFile(s)
+    readFile("hello")
+#    nodespec=nodes('nodesmat')
+#    topo=topology('tris','trismat','Tri1NL')
+#    meshobj=mesh('triangle',None,[nodespec],[topo])
+#    
+#    nodear=array('nodesmat',format=BASE64_GZ,data=np.asarray([(0,0,0),(1,0,0),(0,1,0)]))
+#    indar=array('trismat',format=BASE64,shape='1 3',type='uint8',data=np.asarray([(1,0,2)]))
+#    
+#    ds=dataset([meshobj],None,[nodear,indar])
+#    
+#    s=StringIO()
+#    writeFile(ds,s)
+#    print s.getvalue()
+#    s.seek(0)
+#    print readFile(s)

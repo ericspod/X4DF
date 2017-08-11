@@ -23,10 +23,12 @@
 Unit tests to run with Nose. Use command "nosetests test.py".
 '''
 
-import os,sys,nose
+import os,sys,nose,glob
 from StringIO import StringIO
 
 import numpy as np
+
+import xml.etree.ElementTree
 
 scriptdir=os.path.dirname(os.path.abspath(__file__))
 rootdir=os.path.join(scriptdir,'..','..')
@@ -36,41 +38,67 @@ sys.path.append(rootdir)
 from x4df import nodes,topology,mesh,array,dataset,BASE64_GZ,BASE64, writeFile,readFile
 
 
-def testWrite1():
-    '''Tests writeFile.'''
+trimeshxml='''<?xml version="1.0" encoding="UTF-8"?>
+<x4df>
+ <mesh name="triangle">
+  <nodes src="nodesmat"/>
+  <topology name="tris" src="trismat" elemtype="Tri1NL"/>
+ </mesh>
+ <array name="nodesmat">
+  0.0 0.0 0.0
+  1.0 0.0 0.0
+  0.0 1.0 0.0
+ </array>
+ <array name="trismat" shape="1 3" type="uint8">
+  1 0 2
+ </array>
+</x4df>
+'''
+
+
+def getTriMeshDS():
     nodespec=nodes('nodesmat')
     topo=topology('tris','trismat','Tri1NL')
     meshobj=mesh('triangle',None,[nodespec],[topo])
     
-    nodear=array('nodesmat',format=BASE64_GZ,data=np.asarray([(0,0,0),(1,0,0),(0,1,0)]))
-    indar=array('trismat',format=BASE64,shape='1 3',type='uint8',data=np.asarray([(1,0,2)]))
+    nodear=array('nodesmat',data=np.asarray([(0.0,0.0,0.0),(1.0,0.0,0.0),(0.0,1.0,0.0)]))
+    indar=array('trismat',shape='1 3',type='uint8',data=np.asarray([(1,0,2)]))
     
-    ds=dataset([meshobj],None,[nodear,indar])
-    
+    return dataset([meshobj],None,[nodear,indar])
+
+
+def testWrite1():
+    '''Tests writeFile.'''
     s=StringIO()
-    writeFile(ds,s)
-    
+    writeFile(getTriMeshDS(),s)
+
     
 def testWriteRead1():
     '''Tests applying the results from writeFile to readFile.'''
-    nodespec=nodes('nodesmat')
-    topo=topology('tris','trismat','Tri1NL')
-    meshobj=mesh('triangle',None,[nodespec],[topo])
-    
-    nodear=array('nodesmat',format=BASE64_GZ,data=np.asarray([(0,0,0),(1,0,0),(0,1,0)]))
-    indar=array('trismat',format=BASE64,shape='1 3',type='uint8',data=np.asarray([(1,0,2)]))
-    
-    ds=dataset([meshobj],None,[nodear,indar])
-    
     s=StringIO()
-    writeFile(ds,s)
+    writeFile(getTriMeshDS(),s)
     s.seek(0)
     readFile(s)
     
     
+def testReadWrite1():
+    '''Test reading from an XML string and then writing an identical document.'''
+    obj=readFile(StringIO(trimeshxml))
+    s=StringIO()
+    writeFile(obj,s)
+    nose.tools.assert_equal(s.getvalue().strip(),trimeshxml.strip())
+    
+    
+def testBadString():
+    with nose.tools.assert_raises(xml.etree.ElementTree.ParseError):
+        readFile('Not valid filename or XML data')
+        
+
 def testFileRead1():
-    '''Tests reading from a testdata file.'''
-    obj=readFile(os.path.join(testdir,'test.x4df'))
+    '''Tests reading from a testdata files.'''    
+    for f in glob.glob(os.path.join(testdir,'*.x4df')):
+        obj=readFile(os.path.join(testdir,f))
+        nose.tools.assert_is_not_none(obj,'Failed to read '+f)
     
     
 nose.runmodule() 
