@@ -257,7 +257,7 @@ def readArrayData(shape,dimorder,type_,format_,offset, fullfilename,sep,text):
     dtype_=parseType(type_)
     offset=offset or 0
     
-    if shape:
+    if shape is not None:
         shape=parseNumString(shape,int)
         length=np.prod(shape)*dtype_.itemsize
     else:
@@ -265,15 +265,13 @@ def readArrayData(shape,dimorder,type_,format_,offset, fullfilename,sep,text):
     
     if format_==ASCII:
         arr=np.loadtxt(fullfilename or StringIO(text),dtype_,skiprows=offset,delimiter=sep)
-    else:
-        # read the data from the file or refer to the text
-        dat=open(fullfilename,'rb').read() if fullfilename else text
-
-        # decompress the data using gzip
+    elif fullfilename:
+        with open(fullfilename,'rb') as o:
+            dat=o.read()
+            
         if format_ in (BASE64_GZ,BINARY_GZ):
             dat=gzip.GzipFile(fileobj=StringIO(dat)).read() # RFC 1952
-
-        # decode the base64 data stored in the file or the text
+            
         if format_ in (BASE64,BASE64_GZ):
             b64len=int(4*math.ceil(length/3.0)) if length else None
             dat=base64.decodestring(dat[offset:b64len])
@@ -281,9 +279,15 @@ def readArrayData(shape,dimorder,type_,format_,offset, fullfilename,sep,text):
             dat=dat[offset:length]
 
         arr=np.frombuffer(dat,dtype=dtype_)
+    else:
+        dat=base64.decodestring(text)
+        
+        if format_==BASE64_GZ:
+            dat=gzip.GzipFile(fileobj=StringIO(dat)).read()
+            
+        arr=np.frombuffer(dat,dtype=dtype_)
 
-    if shape:
-        shape=parseNumString(shape,int)
+    if shape is not None:
         arr=arr.reshape(shape)
 
     return arr
@@ -482,6 +486,11 @@ def writeArrayData(data,type_,format_):
         dat=out.getvalue()
     else:
         dat=data.astype(dtype_).tostring()
+        
+        if format_==BASE64_GZ:
+            gzip.GzipFile(fileobj=out,mode='wb',compresslevel=6).write(dat)
+            dat=out.getvalue()
+        
         if format_ in (BASE64, BASE64_GZ):
             dat=base64.b64encode(dat)
 
@@ -567,15 +576,17 @@ def writeFile(obj,obj_or_path,overwriteFiles=True):
 
 if __name__=='__main__':
     
-    nodes=nodes('nodesmat')
+    nodespec=nodes('nodesmat')
     topo=topology('tris','trismat','Tri1NL')
-    mesh=mesh('triangle',None,[nodes],[topo])
+    meshobj=mesh('triangle',None,[nodespec],[topo])
     
-    nodear=array('nodesmat',format=BASE64,filename='test.txt',data=np.asarray([(0,0,0),(1,0,0),(0,1,0)]))
-    indar=array('trismat',format=BASE64,filename='test.txt',shape='1 3',type='uint8',data=np.asarray([(1,0,2)]))
+    nodear=array('nodesmat',format=BASE64_GZ,data=np.asarray([(0,0,0),(1,0,0),(0,1,0)]))
+    indar=array('trismat',format=BASE64,shape='1 3',type='uint8',data=np.asarray([(1,0,2)]))
     
-    ds=dataset([mesh],None,[nodear,indar])
+    ds=dataset([meshobj],None,[nodear,indar])
     
     s=StringIO()
     writeFile(ds,s)
     print s.getvalue()
+    s.seek(0)
+    print readFile(s)
