@@ -20,7 +20,7 @@
 # SOFTWARE.
 
 '''
-Unit tests to run with Nose. Use command "nosetests test.py".
+Unit tests to run with Nose. Use command "nosetests tests.py" or "python tests.py".
 '''
 
 import os,sys,nose,glob
@@ -56,13 +56,13 @@ trimeshxml='''<?xml version="1.0" encoding="UTF-8"?>
 '''
 
 
-def getTriMeshDS():
+def getTriMeshDS(matformat=None):
     nodespec=nodes('nodesmat')
     topo=topology('tris','trismat','Tri1NL')
     meshobj=mesh('triangle',None,[nodespec],[topo])
     
-    nodear=array('nodesmat',data=np.asarray([(0.0,0.0,0.0),(1.0,0.0,0.0),(0.0,1.0,0.0)]))
-    indar=array('trismat',shape='1 3',type='uint8',data=np.asarray([(1,0,2)]))
+    nodear=array('nodesmat',format=matformat,data=np.asarray([(0.0,0.0,0.0),(1.0,0.0,0.0),(0.0,1.0,0.0)]))
+    indar=array('trismat',format=matformat,shape='1 3',type='uint8',data=np.asarray([(1,0,2)]))
     
     return dataset([meshobj],None,[nodear,indar])
 
@@ -81,6 +81,21 @@ def testWriteRead1():
     readFile(s)
     
     
+def testWriteReadB64():
+    '''Test reading and writing base64 and base64_gz formats.'''
+    s=StringIO()
+    writeFile(getTriMeshDS(BASE64),s)
+    s.seek(0)
+    ds=readFile(s)
+    
+    s1=StringIO()
+    writeFile(getTriMeshDS(BASE64_GZ),s1)
+    s1.seek(0)
+    ds1=readFile(s1)
+    
+    nose.tools.assert_true(np.all(ds.arrays[0].data==ds1.arrays[0].data))
+    
+    
 def testReadWrite1():
     '''Test reading from an XML string and then writing an identical document.'''
     obj=readFile(StringIO(trimeshxml))
@@ -90,6 +105,7 @@ def testReadWrite1():
     
     
 def testBadString():
+    '''Test correct raise of ParseError on bad input to readFile().'''
     with nose.tools.assert_raises(xml.etree.ElementTree.ParseError):
         readFile('Not valid filename or XML data')
         

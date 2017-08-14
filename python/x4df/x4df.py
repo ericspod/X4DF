@@ -320,7 +320,7 @@ def readFile(obj_or_path):
     '''
     Read the file path, file-like object, or XML string `obj_or_path' into a dataset object. If the XML parse fails this
     will raise a xml.etree.ElementTree.ParseError exception. If `obj_or_path' is a string but is not a path to an existing
-    file will be treated as a XML string instead.
+    file it will be treated as a XML string instead.
     '''
     basepath='.'
     if isinstance(obj_or_path,str):
@@ -582,19 +582,3 @@ def writeFile(obj,obj_or_path,overwriteFiles=True):
         if isinstance(obj_or_path,str):
             stream.close()
 
-if __name__=='__main__':
-    readFile("hello")
-#    nodespec=nodes('nodesmat')
-#    topo=topology('tris','trismat','Tri1NL')
-#    meshobj=mesh('triangle',None,[nodespec],[topo])
-#    
-#    nodear=array('nodesmat',format=BASE64_GZ,data=np.asarray([(0,0,0),(1,0,0),(0,1,0)]))
-#    indar=array('trismat',format=BASE64,shape='1 3',type='uint8',data=np.asarray([(1,0,2)]))
-#    
-#    ds=dataset([meshobj],None,[nodear,indar])
-#    
-#    s=StringIO()
-#    writeFile(ds,s)
-#    print s.getvalue()
-#    s.seek(0)
-#    print readFile(s)
