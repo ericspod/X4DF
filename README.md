@@ -53,11 +53,11 @@ The `array` XML element uses these attributes:
  * `shape` (optional for text only) - shape of the array, a space separated tuple of positive integer values
  * `dimorder` (optional) - a text specifier indicating the order dimensions (unused for now)
  * `type` (optional) - type of the array elements, defaults to `float32`
- * `format` (optional) - states the data format, defaults to `ASCII`
- * `offset` (optional) - states the offset in characters (if `format` is `ASCII`) or bytes (if `format` is not `ASCII`) 
-   the array starts from when reading from a file, default is 0
- * `filename` (optional) - file to read data from, otherwise data must be stored in the body of the element
- * `sep` (optional) - separator character between elements in `ASCII` format, default is `,`
+ * `format` (optional) - states the data format, defaults to `ascii`
+ * `offset` (optional) - states the offset in characters (if `format` is `ascii`) or bytes (if `format` is not `ascii`) 
+   the array starts from when reading from a file, default is 0 and is ignored if not reading from a file
+ * `filename` (optional if format not `binary` or `binary_gz`) - file storing data, otherwise data must be stored in the body of the element
+ * `sep` (optional) - separator character between elements in `ascii` format, default is `,`
 
 Array type is specified using the format `[><=]('uint','int','float')('8','16','32','64')` which states endianness, base
 type, and size. For example, an unsigned little endian 16-bit integer has type `<uint16`. Endianness is meaningful for binary
@@ -70,33 +70,32 @@ data is text then the shape for a 2D array can be inferred by how many lines the
 otherwise this attribute is mandatory.
 
 The valid formats for array data are as follows:
- * `ASCII` - data is stored as the textual representation of the array, with elements formatted for the specified type 
- * `BASE64` - data is stored in binary representation and then encoded in base64
- * `BASE64_GZ` - data is stored in binary representation, compressed with the gzip algorithm (RFC 1952), and then encoded in base64
- * `BINARY` - data is stored in binary representation directly, this must be in a separate binary file 
- * `BINARY_GZ` - data is stored in binary representation directly, compressed with the gzip algorithm (RFC 1952), this must be in a separate binary file 
+ * `ascii` - data is stored as the textual representation of the array, with elements formatted for the specified type 
+ * `base64` - data is stored in binary representation and then encoded in base64
+ * `base64_gz` - data is stored in binary representation, compressed with gzip, and then encoded in base64
+ * `binary` - data is stored in binary representation directly, this must be in a separate binary file 
+ * `binary_gz` - data is stored in binary representation directly, compressed with gzip, this must be in a separate binary file 
 
-Data in any format can be stored in a file, for `BINARY` or `BINARY_GZ` data it is mandatory to be stored as such. When 
-reading data from a file, reading starts from the `offset` line if text or from the `offset` byte otherwise. The use of
-offsets allows multiple arrays to be stored in the same file. If `shape` is not given for text then all the file from 
-the offset will be read. The name of the file is given in `filename` which is typically a path relative to the XML 
-document. 
+Data in any format can be stored in a file, it is mandatory for `binary` or `binary_gz` data to be stored as such. When 
+reading data from a file, reading starts from the `offset` line if text or from the `offset` byte of the uncompressed data
+otherwise. The use of offsets allows multiple arrays to be stored in the same file. If `shape` is not given for text then 
+all the data from the offset will be read. The name of the file is given in `filename` which is typically a path relative 
+to the XML document. 
 
 For the compressed formats the whole file is compressed together, which can be done with the `gzip` command line tool. 
 To read from such a file, it first must be decompressed in its entirety then read from an offset in the resulting data.
 
-Creating base64 data is done by converting the array into its binary representation, compressing if `BASE64_GZ` is used,
+Creating base64 data is done by converting the array into its binary representation, compressing if `base64_gz` is used,
 then encoding as base64 text. This allows compressed data to be stored in the text body of a `array` element.
 
 ### Array Ordering
 
 As text or binary array values are stored in rightmost index first order, that is to say the rightmost index is the least
-significant. This implies that a text or binary array is flattened to a 1D list of values. 
+significant. 
+Given an n-dimensional  array of dimensions `D=(d1,d2...,dn)`, a value at index `I=(i1,i2,....,in)` will be stored at the 
+address `Sigma(I[i]*Pi(D[i+1:]) for 1<=i<=n)`. This is called C or row-major ordering.
 
-Given an n-dimensional  array of dimensions `D=(d1,d2...,dn)`, a value at index `I=(i1,i2,....,in)` will be stored in the 
-1D list at index `Sigma(I[i]*Pi(D[i+1:]) for 1<=i<=n)`.
-
-For example, the array `[[0,1],[2,3]]` with dimensions `(2,2)` is flattened out to the list `(0,1,2,3,4,5,6,7)`. These
+For example, the array `[[0,1],[2,3]]` with dimensions `(2,2)` is flattened out to the list `(0,1,2,3)`. These
 values would then be stored in a chosen data format in binary or as text. 
 
 ### Text Array
@@ -124,4 +123,12 @@ stored as the first row. For 3D/4D images indexed as (width,height,depth) or (wi
 values in the depth or time dimention get stored first.
 
 ### Binary Array
+
+Binary data is stored as described above in rightmost index first order, and can be compressed and/or encoded in base64.
+If the format is `binary` or `binary_gz` then the final output is a byte stream which likely isn't valid text therefore
+not valid in an XML document so must be stored in a separate file named in the `filename` attribute. 
+
+To store array data, the array is first converted to a byte stream. If the format is `binary_gz` or `base64_gz` the gzip 
+algorithm (RFC 1952) is applied to produce a compresed byte stream. Subsequently if the format is `base64` or `base64_gz`
+then the byte stream is encoded as a base64 string with trailing `=` pad characters. 
 
