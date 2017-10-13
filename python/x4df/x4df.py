@@ -83,6 +83,7 @@ import xml.etree.ElementTree as ET
 from collections import OrderedDict
 from StringIO import StringIO
 import os
+import math
 import base64
 import gzip
 import contextlib
@@ -158,7 +159,9 @@ def parseNumString(val,dtype=float,sep=' '):
 
 def parseType(type_):
     '''Convert type string into a numpy type with byte ordering.'''
-    if type_[0] in ('>','<','='):
+    if not type_:
+        return np.dtype('float32')
+    elif type_[0] in ('>','<','='):
         return np.dtype(type_[1:]).newbyteorder(type_[0])
     else:
         return np.dtype(type_)
@@ -249,33 +252,44 @@ def readImage(tree):
 
 def readArrayData(shape,dimorder,type_,format_,offset, fullfilename,sep,text):
     '''Read the data for an array from the file `fullfilename' if given otherwise from the `text' string value.'''
-    assert format_ in validFormats
+    assert not format_ or format_ in validFormats
     assert fullfilename or text
     assert fullfilename or format_ not in validFormats[3:5], 'Binary data can only be stored in separate files'
 
     dtype_=parseType(type_)
-
-    if format_==ASCII:
-        arr=np.loadtxt(fullfilename or StringIO(text),dtype_,skiprows=offset,delimiter=sep)
+    offset=int(offset or 0)
+    
+    if shape is not None:
+        shape=parseNumString(shape,int)
+        length=np.prod(shape)*dtype_.itemsize
     else:
-        # read the data from the file or refer to the text
-        dat=open(fullfilename,'rb').read() if fullfilename else text
-
-        if offset:
-            dat=dat[offset:]
-
-        # decode the base64 data stored in the file or the text
-        if format_ in (BASE64,BASE64_GZ):
-            dat=base64.decodestring(dat)
-
-        # decompress the data using gzip
+        length=None
+    
+    if format_ in (None,ASCII):
+        arr=np.loadtxt(fullfilename or StringIO(text),dtype_,skiprows=offset,delimiter=sep)
+    elif fullfilename:
+        with open(fullfilename,'rb') as o:
+            dat=o.read()
+            
         if format_ in (BASE64_GZ,BINARY_GZ):
             dat=gzip.GzipFile(fileobj=StringIO(dat)).read() # RFC 1952
+            
+        if format_ in (BASE64,BASE64_GZ):
+            b64len=int(4*math.ceil(length/3.0)) if length else None
+            dat=base64.decodestring(dat[offset:b64len])
+        else:
+            dat=dat[offset:length]
 
         arr=np.frombuffer(dat,dtype=dtype_)
+    else:
+        dat=base64.decodestring(text)
+        
+        if format_==BASE64_GZ:
+            dat=gzip.GzipFile(fileobj=StringIO(dat)).read()
+            
+        arr=np.frombuffer(dat,dtype=dtype_)
 
-    if shape:
-        shape=parseNumString(shape,int)
+    if shape is not None:
         arr=arr.reshape(shape)
 
     return arr
@@ -285,10 +299,10 @@ def readArray(arr,basepath='.'):
     '''Read an array from the array XML element `arr', loading files starting from directory `basepath'.'''
     name=arr.get('name')
     shape=arr.get('shape')
-    dimorder=arr.get('dimorder','')
-    type_=arr.get('type','float')
-    format_=arr.get('format','ascii')
-    offset=arr.get('offset',0)
+    dimorder=arr.get('dimorder')
+    type_=arr.get('type')
+    format_=arr.get('format')
+    offset=arr.get('offset')
     filename=arr.get('filename')
     sep=arr.get('sep')
     text=arr.text
@@ -297,13 +311,17 @@ def readArray(arr,basepath='.'):
     if filename:
         fullfilename=os.path.join(basepath,filename)
 
-    arr=readArrayData(shape,dimorder,type_,format_,int(offset),fullfilename,sep,text)
+    arr=readArrayData(shape,dimorder,type_,format_,offset,fullfilename,sep,text)
 
     return array(name, shape, dimorder, type_, format_, offset, filename, arr)
 
 
 def readFile(obj_or_path):
-    '''Read the file path or file-like object `obj_or_path' into a dataset object.'''
+    '''
+    Read the file path, file-like object, or XML string `obj_or_path' into a dataset object. If the XML parse fails this
+    will raise a xml.etree.ElementTree.ParseError exception. If `obj_or_path' is a string but is not a path to an existing
+    file it will be treated as a XML string instead.
+    '''
     basepath='.'
     if isinstance(obj_or_path,str):
         if os.path.isfile(obj_or_path):
@@ -342,8 +360,7 @@ class XMLStream(object):
 
     def element(self,name,attrs={}):
         values=[name]+['%s="%s"'%(k,v) for k,v in attrs.items()]
-        spacing=self.sep*len(self.names)
-        self.write('%s<%s/>\n'%(spacing,' '.join(values)))
+        self.writeline('<%s/>'%(' '.join(values)))
 
     def writeline(self,val):
         spacing=self.sep*len(self.names)
@@ -466,26 +483,29 @@ def writeImage(obj,stream):
 
 def writeArrayData(data,type_,format_):
     '''Returns a string with format `format_' for the numpy array `data' containing values of type `type_'.'''
-    dtype_=parseType(type_) if type_ else 'float'
+    dtype_=parseType(type_)
     out=StringIO('')
-    assert format_ in (None,validFormats)
+    b64linelen=80
+    format_=format_ if format_ in validFormats else ASCII
 
-    if format_ in (None,ASCII):
+    if format_==ASCII:
         np.savetxt(out,reshape2D(data),fmt='%s')
         dat=out.getvalue()
     else:
         dat=data.astype(dtype_).tostring()
-        if format_ in (BINARY_GZ,BASE64_GZ): # TODO: not implementing spec as this assumes only one array per file
+        
+        if format_==BASE64_GZ:
             gzip.GzipFile(fileobj=out,mode='wb',compresslevel=6).write(dat)
             dat=out.getvalue()
-
+        
         if format_ in (BASE64, BASE64_GZ):
             dat=base64.b64encode(dat)
+            dat='\n'.join(dat[i:i+b64linelen] for i in range(0, len(dat), b64linelen))
 
     return dat
 
 
-def writeArray(obj,stream,basepath='.',overwriteFile=True):
+def writeArray(obj,stream,basepath,appendFile,overwriteFile):
     '''Write an array to XML and store its data to file if necessary, overwriting existing if `overwriteFile.'''
     attrs=OrderedDict({'name':obj.name})
 
@@ -498,19 +518,34 @@ def writeArray(obj,stream,basepath='.',overwriteFile=True):
     if obj.format:
         attrs['format']=obj.format
     if obj.filename:
-        attrs['filename']=obj.filename #os.path.relpath(obj.filename,basepath)
+        attrs['filename']=obj.filename
 
     dat=writeArrayData(obj.data,obj.type,obj.format)
 
-    if obj.filename: # TODO: not implementing spec correctly for writing multiple arrays to a file
+    if obj.filename: 
         filename=os.path.join(basepath,obj.filename)
-
+        
         if overwriteFile or not os.path.isfile(filename):
-            with open(filename,'wb' if obj.format in (BASE64_GZ,BINARY_GZ) else 'w') as o:
-                o.write(dat)
-        elif obj.offset:
-            attrs['offset']=obj.offset # add the offset value for an existing file that isn't being overwritten
-
+            if appendFile: # if appending to existing file, choose mode and offset
+                if obj.format in (BINARY,BINARY_GZ):
+                    mode='ab'
+                    obj.offset=os.path.getsize(filename) # byte count
+                else:
+                    mode='a'
+                    obj.offset=sum(1 for _ in open(filename)) # line count
+            else: # otherwise choose mode and offset of 0
+                mode='wb' if obj.format in (BINARY,BINARY_GZ) else 'w'
+                obj.offset=0
+                
+            if obj.format in (BASE64_GZ,BINARY_GZ):
+                with gzip.GzipFile(filename,mode,6) as o:
+                    o.write(dat)
+            else:
+                with open(filename,mode) as o:
+                    o.write(dat)
+                    
+        attrs['offset']=obj.offset
+            
         stream.element('array',attrs)
     else:
         with XMLStream.tag(stream,'array',attrs) as o:
@@ -522,6 +557,7 @@ def writeFile(obj,obj_or_path,overwriteFiles=True):
     '''Write the x4df object to the path or file-like object `obj_or_path'. Data files are overwritten if `overwriteFiles'.'''
     basepath=os.path.dirname(obj_or_path) if isinstance(obj_or_path,str) else os.getcwd()
     stream=obj_or_path
+    filenames=set()
 
     if isinstance(obj_or_path,str):
         stream=open(obj_or_path,'w')
@@ -537,24 +573,12 @@ def writeFile(obj,obj_or_path,overwriteFiles=True):
                 writeImage(image,ostream)
 
             for array in (obj.arrays or []):
-                writeArray(array,ostream,basepath,overwriteFiles)
+                writeArray(array,ostream,basepath,array.filename in filenames,overwriteFiles)
+                if array.filename:
+                    filenames.add(array.filename)
 
             writeMetas(obj.metas,ostream)
     finally:
         if isinstance(obj_or_path,str):
             stream.close()
 
-if __name__=='__main__':
-    
-    nodes=nodes('nodesmat')
-    topo=topology('tris','trismat','Tri1NL')
-    mesh=mesh('triangle',None,[nodes],[topo])
-    
-    nodear=array('nodesmat',data=np.asarray([(0,0,0),(1,0,0),(0,1,0)]))
-    indar=array('trismat',shape='1 3',type='uint8',data=np.asarray([(1,0,2)]))
-    
-    ds=dataset([mesh],None,[nodear,indar])
-    
-    s=StringIO()
-    writeFile(ds,s)
-    print s.getvalue()
