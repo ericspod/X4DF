@@ -81,13 +81,15 @@ main README.md file:
 
 import xml.etree.ElementTree as ET
 from collections import OrderedDict
-from StringIO import StringIO
 import os
 import math
 import base64
 import gzip
 import contextlib
 import numpy as np
+from numpy.compat import asbytes
+
+from io import StringIO,BytesIO
 
 ### Types and Definitions
 
@@ -96,7 +98,7 @@ def namedrecord(name,members):
     members=[m.strip() for m in members.split(',' if ',' in members else None)]
 
     def _init(obj,*values,**kwvalues):
-        for name,value in zip(members,values)+kwvalues.items():
+        for name,value in list(zip(members,values))+list(kwvalues.items()):
             setattr(obj,name,value)
 
     def _str(obj):
@@ -120,7 +122,7 @@ imagedata=namedrecord('imagedata','src timestep transform metas')
 mesh=namedrecord('mesh','name timescheme nodes topologies fields metas')
 image=namedrecord('image','name timescheme transform imagedata metas')
 transform=namedrecord('transform','position rmatrix scale')
-array=namedrecord('array','name shape dimorder type format offset filename data')
+array=namedrecord('array','name shape dimorder type format offset size filename data')
 
 # valid array format names
 ASCII='ascii' # ascii text containing whitespace-separated numbers
@@ -282,7 +284,7 @@ def readArrayData(shape,dimorder,type_,format_,offset, fullfilename,sep,text):
 
         arr=np.frombuffer(dat,dtype=dtype_)
     else:
-        dat=base64.decodestring(text)
+        dat=base64.decodestring(bytes(text))
         
         if format_==BASE64_GZ:
             dat=gzip.GzipFile(fileobj=StringIO(dat)).read()
@@ -303,6 +305,7 @@ def readArray(arr,basepath='.'):
     type_=arr.get('type')
     format_=arr.get('format')
     offset=arr.get('offset')
+    size=arr.get('size')
     filename=arr.get('filename')
     sep=arr.get('sep')
     text=arr.text
@@ -313,7 +316,7 @@ def readArray(arr,basepath='.'):
 
     arr=readArrayData(shape,dimorder,type_,format_,offset,fullfilename,sep,text)
 
-    return array(name, shape, dimorder, type_, format_, offset, filename, arr)
+    return array(name, shape, dimorder, type_, format_, offset, size,filename, arr)
 
 
 def readFile(obj_or_path):
@@ -481,28 +484,36 @@ def writeImage(obj,stream):
                 o.element('imagedata',attrs)
 
 
-def writeArrayData(data,type_,format_):
+def writeArrayData(data,type_,format_,outstream):
     '''Returns a string with format `format_' for the numpy array `data' containing values of type `type_'.'''
     dtype_=parseType(type_)
-    out=StringIO('')
+    #out=StringIO('')
     b64linelen=80
     format_=format_ if format_ in validFormats else ASCII
 
     if format_==ASCII:
-        np.savetxt(out,reshape2D(data),fmt='%s')
-        dat=out.getvalue()
+        data=reshape2D(data)
+        np.savetxt(outstream,data,fmt='%s')
+        #dat=out.getvalue()
     else:
         dat=data.astype(dtype_).tostring()
         
-        if format_==BASE64_GZ:
-            gzip.GzipFile(fileobj=out,mode='wb',compresslevel=6).write(dat)
-            dat=out.getvalue()
+        if format_ in (BINARY_GZ, BASE64_GZ):
+            outstream=gzip.open(outstream,'wb')
+#            out=BytesIO()
+#            gzip.GzipFile(fileobj=out,mode='wb',compresslevel=6).write(dat)
+#            dat=out.getvalue()
         
         if format_ in (BASE64, BASE64_GZ):
-            dat=base64.b64encode(dat)
-            dat='\n'.join(dat[i:i+b64linelen] for i in range(0, len(dat), b64linelen))
+            dat=base64.b64encode(dat).decode()
+#            dat='\n'.join(dat[i:i+b64linelen] for i in range(0, len(dat), b64linelen))
 
-    return dat
+            for i in range(0, len(dat), b64linelen):
+                outstream.write(asbytes(dat[i:i+b64linelen]+'\n'))
+        else:
+            outstream.write(dat)
+
+    #return dat
 
 
 def writeArray(obj,stream,basepath,appendFile,overwriteFile):
@@ -520,11 +531,10 @@ def writeArray(obj,stream,basepath,appendFile,overwriteFile):
     if obj.filename:
         attrs['filename']=obj.filename
 
-    dat=writeArrayData(obj.data,obj.type,obj.format)
+    #dat=writeArrayData(obj.data,obj.type,obj.format)
 
     if obj.filename: 
         filename=os.path.join(basepath,obj.filename)
-        
         if overwriteFile or not os.path.isfile(filename):
             if appendFile: # if appending to existing file, choose mode and offset
                 if obj.format in (BINARY,BINARY_GZ):
@@ -533,23 +543,41 @@ def writeArray(obj,stream,basepath,appendFile,overwriteFile):
                 else:
                     mode='a'
                     obj.offset=sum(1 for _ in open(filename)) # line count
+                    
+                mode='ab'
             else: # otherwise choose mode and offset of 0
                 mode='wb' if obj.format in (BINARY,BINARY_GZ) else 'w'
                 obj.offset=0
+                mode='wb'
                 
-            if obj.format in (BASE64_GZ,BINARY_GZ):
-                with gzip.GzipFile(filename,mode,6) as o:
-                    o.write(dat)
+            with open(filename,mode) as out:
+                writeArrayData(obj.data,obj.type,obj.format,out)
+                
+            if obj.format in (BINARY,BINARY_GZ):
+                obj.size=os.path.getsize(filename)-obj.offset
             else:
-                with open(filename,mode) as o:
-                    o.write(dat)
+                obj.size=sum(1 for _ in open(filename))-obj.offset
+#                
+#            if obj.format in (BASE64_GZ,BINARY_GZ):
+#                with gzip.GzipFile(filename,mode,6) as o:
+#                    o.write(dat)
+#            else:
+#                with open(filename,mode) as o:
+#                    o.write(dat)
                     
-        attrs['offset']=obj.offset
+            attrs['offset']=obj.offset
+            
+            if obj.size:
+                attrs['size']=obj.size
             
         stream.element('array',attrs)
     else:
         with XMLStream.tag(stream,'array',attrs) as o:
-            for line in dat.strip().split('\n'):
+            out=BytesIO()
+            writeArrayData(obj.data,obj.type,obj.format,out)
+            dat=out.getvalue().decode()
+            dat=dat.strip().split('\n')
+            for line in dat:
                 o.writeline(line.strip())
 
 

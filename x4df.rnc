@@ -37,6 +37,7 @@ TopoName=attribute toponame { text } # field topology name
 Spatial=attribute spatial { text } # name of spatial topology field is for
 FieldType=attribute fieldtype { "node"|"elem"|"index" } #  per-node, per-element, or per-topology index field
 Offset = attribute offset { xsd:integer } # array offset value, skip rows for text, bytes for binary
+Size = attribute size { xsd:integer } # array size value, size of array or number of lines for array's section in file
 InitialNodes=attribute initialnodes { text } # initial node array for displacement node sets
 
 anyElement = element * { attribute * {text}*, mixed{anyElement*} } # matches any xml
@@ -54,4 +55,4 @@ ImageData=element imagedata { Src, Timestep?, Transform?, Meta* } # image data d
 TimeScheme=element timescheme { Start, Step } # time scheme definition for time-dependent meshes or images
 Mesh= element mesh { Name, TimeScheme?, Nodes+, Topology*, Field*, Meta* } # mesh definition
 Image=element image { Name, TimeScheme?, Transform?, ImageData+, Meta* } # image definition
-Array= element array { Name, Shape?, DimOrder?, Type?, Format?, Offset?, Filename?, Sep?, text } # array definition
+Array= element array { Name, Shape?, DimOrder?, Type?, Format?, Offset?, Size?, Filename?, Sep?, text } # array definition

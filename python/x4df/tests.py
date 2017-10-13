@@ -23,19 +23,21 @@
 Unit tests to run with Nose. Use command "nosetests tests.py" or "python tests.py".
 '''
 
-import os,sys,nose,glob
-from StringIO import StringIO
+from __future__ import print_function, division
+import os,sys,glob,unittest,shutil,tempfile, base64
+import xml.etree.ElementTree
+
+from io import StringIO,BytesIO
 
 import numpy as np
 
-import xml.etree.ElementTree
 
 scriptdir=os.path.dirname(os.path.abspath(__file__))
 rootdir=os.path.join(scriptdir,'..','..')
 testdir=os.path.join(rootdir,'testdata')
 
 sys.path.append(rootdir)
-from x4df import nodes,topology,mesh,array,dataset,BASE64_GZ,BASE64, writeFile,readFile
+from x4df import nodes,topology,mesh,array,dataset,BASE64_GZ,BASE64,BINARY, BINARY_GZ, writeFile,readFile
 
 
 trimeshxml='''<?xml version="1.0" encoding="UTF-8"?>
@@ -56,65 +58,148 @@ trimeshxml='''<?xml version="1.0" encoding="UTF-8"?>
 '''
 
 
-def getTriMeshDS(matformat=None):
+def getTriMeshDS(matformat=None,nodefile=None,indsfile=None):
     nodespec=nodes('nodesmat')
     topo=topology('tris','trismat','Tri1NL')
     meshobj=mesh('triangle',None,[nodespec],[topo])
     
-    nodear=array('nodesmat',format=matformat,data=np.asarray([(0.0,0.0,0.0),(1.0,0.0,0.0),(0.0,1.0,0.0)]))
-    indar=array('trismat',format=matformat,shape='1 3',type='uint8',data=np.asarray([(1,0,2)]))
+    nodedat=np.asarray([(0.0,0.0,0.0),(1.0,0.0,0.0),(0.0,1.0,0.0)])
+    indsdat=np.asarray([(1,0,2)])
+    
+    nodear=array('nodesmat',format=matformat,filename=nodefile,data=nodedat)
+    indar=array('trismat',format=matformat,filename=indsfile,shape='1 3',type='uint8',data=indsdat)
     
     return dataset([meshobj],None,[nodear,indar])
 
 
-def testWrite1():
-    '''Tests writeFile.'''
-    s=StringIO()
-    writeFile(getTriMeshDS(),s)
-
-    
-def testWriteRead1():
-    '''Tests applying the results from writeFile to readFile.'''
-    s=StringIO()
-    writeFile(getTriMeshDS(),s)
-    s.seek(0)
-    readFile(s)
-    
-    
-def testWriteReadB64():
-    '''Test reading and writing base64 and base64_gz formats.'''
-    s=StringIO()
-    writeFile(getTriMeshDS(BASE64),s)
-    s.seek(0)
-    ds=readFile(s)
-    
-    s1=StringIO()
-    writeFile(getTriMeshDS(BASE64_GZ),s1)
-    s1.seek(0)
-    ds1=readFile(s1)
-    
-    nose.tools.assert_true(np.all(ds.arrays[0].data==ds1.arrays[0].data))
-    
-    
-def testReadWrite1():
-    '''Test reading from an XML string and then writing an identical document.'''
-    obj=readFile(StringIO(trimeshxml))
-    s=StringIO()
-    writeFile(obj,s)
-    nose.tools.assert_equal(s.getvalue().strip(),trimeshxml.strip())
-    
-    
-def testBadString():
-    '''Test correct raise of ParseError on bad input to readFile().'''
-    with nose.tools.assert_raises(xml.etree.ElementTree.ParseError):
-        readFile('Not valid filename or XML data')
+class TestIO(unittest.TestCase):
+    def setUp(self):
+        self.tempdir=tempfile.mkdtemp()
         
+        self.trimesh=getTriMeshDS()
+        self.trimeshB64=getTriMeshDS(BASE64)
+        self.trimeshB64GZ=getTriMeshDS(BASE64_GZ)
+        self.trimeshBin=getTriMeshDS(BINARY)
+        self.trimeshBinGZ=getTriMeshDS(BINARY_GZ)
+        
+    def tearDown(self):
+        shutil.rmtree(self.tempdir)
+        
+    def tempfile(self,filename):
+        return os.path.join(self.tempdir,filename)
+        
+    def testWrite1(self):
+        '''Tests writeFile.'''
+        s=StringIO()
+        writeFile(self.trimesh,s)
+        
+    def testWriteSeparateFile1(self):
+        '''Test writing one array to a separate file.'''
+        xfile=self.tempfile('trimesh.x4df')
+        nfile=self.tempfile('nodes')
+        
+        mesh=getTriMeshDS(nodefile=nfile)
+        writeFile(mesh,xfile)
+        
+        self.assertEqual(mesh.arrays[0].size,3,'Bad node array size')
+        
+        with open(mesh.arrays[0].filename) as o:
+            self.assertEqual(o.read(),'0.0 0.0 0.0\n1.0 0.0 0.0\n0.0 1.0 0.0\n','Bad separate file contents')
+            
+    def testWriteSeparateFile2(self):
+        '''Test writing multiple arrays to a separate file.'''
+        xfile=self.tempfile('trimesh.x4df')
+        nfile=self.tempfile('nodes')
+        
+        mesh=getTriMeshDS(nodefile=nfile,indsfile=nfile)
+        writeFile(mesh,xfile)
+        
+        self.assertEqual(mesh.arrays[0].size,3,'Bad node array size')
+        self.assertEqual(mesh.arrays[1].size,1,'Bad index array size')
+        self.assertEqual(mesh.arrays[1].offset,3,'Bad index array offset')
+        
+        with open(mesh.arrays[0].filename) as o:
+            self.assertEqual(o.read(),'0.0 0.0 0.0\n1.0 0.0 0.0\n0.0 1.0 0.0\n1 0 2\n','Bad separate file contents')
+            
+    def testWriteSeparateFile3(self):
+        '''Test writing one array to a separate b64 file.'''
+        xfile=self.tempfile('trimesh.x4df')
+        nfile=self.tempfile('nodes')
+        
+        mesh=getTriMeshDS(BASE64,nfile)
+        writeFile(mesh,xfile)
+        
+        meshdata=mesh.arrays[0].data
+        b64=base64.b64encode(meshdata.astype(np.dtype('float32')).tostring()).decode()
+        
+        self.assertEqual(mesh.arrays[0].size,1,'Bad node array size')
+        
+        with open(mesh.arrays[0].filename) as o:
+            filecontents=o.read().strip()
+            self.assertEqual(filecontents,b64,'File contents length %i does not match expected contents of length %i'%(len(filecontents),len(b64)))
 
-def testFileRead1():
-    '''Tests reading from a testdata files.'''    
-    for f in glob.glob(os.path.join(testdir,'*.x4df')):
-        obj=readFile(os.path.join(testdir,f))
-        nose.tools.assert_is_not_none(obj,'Failed to read '+f)
+    def testWriteSeparateFile4(self):
+        '''Test writing multiple arrays to a separate b64 file.'''
+        xfile=self.tempfile('trimesh.x4df')
+        nfile=self.tempfile('nodes')
+        
+        mesh=getTriMeshDS(BASE64,nfile,nfile)
+        writeFile(mesh,xfile)
+        
+        meshdata=mesh.arrays[0].data
+        indsdata=mesh.arrays[1].data
+        b64=base64.b64encode(meshdata.astype(np.dtype('float32')).tostring()).decode()
+        b64+='\n'+base64.b64encode(indsdata.astype(np.dtype('uint8')).tostring()).decode()
+        
+        self.assertEqual(mesh.arrays[0].size,1,'Bad node array size')
+        self.assertEqual(mesh.arrays[1].size,1,'Bad index array size')
+        self.assertEqual(mesh.arrays[1].offset,1,'Bad index array offset')
+        
+        with open(mesh.arrays[0].filename) as o:
+            filecontents=o.read().strip()
+            self.assertEqual(filecontents,b64,'File contents length %i does not match expected contents of length %i'%(len(filecontents),len(b64)))
+        
+    def testWriteRead1(self):
+        '''Tests applying the results from writeFile() to readFile().'''
+        s=StringIO()
+        writeFile(self.trimesh,s)
+        s.seek(0)
+        readFile(s)
+        
+    def testWriteReadB64(self):
+        '''Test reading and writing base64 and base64_gz formats.'''
+        s=BytesIO()
+        writeFile(self.trimeshB64,s)
+        s.seek(0)
+        ds=readFile(s)
+        
+        s1=BytesIO()
+        writeFile(self.trimeshB64GZ,s1)
+        s1.seek(0)
+        ds1=readFile(s1)
+        
+        self.assertTrue(np.all(ds.arrays[0].data==ds1.arrays[0].data))
+        
+#    def testReadWrite1(self):
+#        '''Test reading from an XML string and then writing an identical document.'''
+#        obj=readFile(StringIO(trimeshxml))
+#        s=StringIO()
+#        writeFile(obj,s)
+#        self.assertEqual(s.getvalue().strip(),trimeshxml.strip())
+#        
+#    def testBadString(self):
+#        '''Test correct raise of ParseError on bad input to readFile().'''
+#        with self.assertRaises(xml.etree.ElementTree.ParseError):
+#            readFile('Not valid filename or XML data')
+#    
+#    def testFileRead1(self):
+#        '''Tests reading from a testdata files.'''    
+#        for f in glob.glob(os.path.join(testdir,'*.x4df')):
+#            obj=readFile(os.path.join(testdir,f))
+#            self.assertIsNotNone(obj,'Failed to read '+f)
     
     
-nose.runmodule() 
+if __name__ == '__main__':
+    print(sys.version)
+    unittest.main()
+    
