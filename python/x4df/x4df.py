@@ -82,6 +82,7 @@ main README.md file:
 import xml.etree.ElementTree as ET
 from collections import OrderedDict
 import os
+import sys
 import math
 import base64
 import gzip
@@ -89,7 +90,12 @@ import contextlib
 import numpy as np
 from numpy.compat import asbytes
 
-from io import StringIO,BytesIO
+if sys.version_info.major>2:
+    from io import StringIO,BytesIO
+else:
+    from StringIO import StringIO
+    BytesIO=StringIO
+    #from io import BytesIO
 
 ### Types and Definitions
 
@@ -274,20 +280,20 @@ def readArrayData(shape,dimorder,type_,format_,offset, fullfilename,sep,text):
             dat=o.read()
             
         if format_ in (BASE64_GZ,BINARY_GZ):
-            dat=gzip.GzipFile(fileobj=StringIO(dat)).read() # RFC 1952
+            dat=gzip.GzipFile(fileobj=BytesIO(dat)).read() # RFC 1952
             
         if format_ in (BASE64,BASE64_GZ):
             b64len=int(4*math.ceil(length/3.0)) if length else None
-            dat=base64.decodestring(dat[offset:b64len])
+            dat=base64.b64decode(dat[offset:b64len])
         else:
             dat=dat[offset:length]
 
         arr=np.frombuffer(dat,dtype=dtype_)
     else:
-        dat=base64.decodestring(bytes(text))
+        dat=base64.b64decode(text)
         
         if format_==BASE64_GZ:
-            dat=gzip.GzipFile(fileobj=StringIO(dat)).read()
+            dat=gzip.GzipFile(fileobj=BytesIO(dat)).read()
             
         arr=np.frombuffer(dat,dtype=dtype_)
 
@@ -331,7 +337,7 @@ def readFile(obj_or_path):
             basepath=os.path.dirname(obj_or_path)
         else:
             obj_or_path=StringIO(obj_or_path)
-
+            
     root=ET.parse(obj_or_path)
     meshes=map(readMesh,root.findall('mesh'))
     images=map(readImage,root.findall('image'))
@@ -383,7 +389,7 @@ class XMLStream(object):
 def toNumString(arr,dtype=float):
     '''Convert the array of numbers `arr' into a space-separated string list with values of type `dtype'.'''
     dtype=np.dtype(dtype)
-    return ' '.join(map(str,arr.astype(dtype)))
+    return ' '.join(map(str,np.asarray(arr).astype(dtype)))
 
 
 def reshape2D(arr):
@@ -485,7 +491,7 @@ def writeImage(obj,stream):
 
 
 def writeArrayData(data,type_,format_,outstream):
-    '''Returns a string with format `format_' for the numpy array `data' containing values of type `type_'.'''
+    '''Writes `data' to the stream `outstream' after being converted to dtype `type_' and formatted as `format_'.'''
     dtype_=parseType(type_)
     #out=StringIO('')
     b64linelen=80
@@ -493,32 +499,38 @@ def writeArrayData(data,type_,format_,outstream):
 
     if format_==ASCII:
         data=reshape2D(data)
-        np.savetxt(outstream,data,fmt='%s')
-        #dat=out.getvalue()
+        out=BytesIO()
+        np.savetxt(out,data,fmt='%s')
+        outstream.write(out.getvalue().decode())
     else:
         dat=data.astype(dtype_).tostring()
         
         if format_ in (BINARY_GZ, BASE64_GZ):
-            outstream=gzip.open(outstream,'wb')
-#            out=BytesIO()
-#            gzip.GzipFile(fileobj=out,mode='wb',compresslevel=6).write(dat)
-#            dat=out.getvalue()
+            out=BytesIO()
+            gzip.GzipFile(fileobj=out,mode='wb',compresslevel=6).write(dat)
+            dat=out.getvalue()
         
         if format_ in (BASE64, BASE64_GZ):
-            dat=base64.b64encode(dat).decode()
-#            dat='\n'.join(dat[i:i+b64linelen] for i in range(0, len(dat), b64linelen))
+            dat=base64.b64encode(dat)#.decode()
 
             for i in range(0, len(dat), b64linelen):
-                outstream.write(asbytes(dat[i:i+b64linelen]+'\n'))
+                line=dat[i:i+b64linelen]+'\n'
+                try:
+                    outstream.write(line)
+                except:
+                    sys.stderr.write(str(outstream)+'\n')
+                    raise
+
         else:
             outstream.write(dat)
-
-    #return dat
 
 
 def writeArray(obj,stream,basepath,appendFile,overwriteFile):
     '''Write an array to XML and store its data to file if necessary, overwriting existing if `overwriteFile.'''
     attrs=OrderedDict({'name':obj.name})
+
+    if obj.shape is None and obj.format not in (None,ASCII):
+        obj.shape=toNumString(obj.data.shape,int)
 
     if obj.shape is not None:
         attrs['shape']=obj.shape
@@ -530,7 +542,7 @@ def writeArray(obj,stream,basepath,appendFile,overwriteFile):
         attrs['format']=obj.format
     if obj.filename:
         attrs['filename']=obj.filename
-
+        
     #dat=writeArrayData(obj.data,obj.type,obj.format)
 
     if obj.filename: 
@@ -544,11 +556,9 @@ def writeArray(obj,stream,basepath,appendFile,overwriteFile):
                     mode='a'
                     obj.offset=sum(1 for _ in open(filename)) # line count
                     
-                mode='ab'
             else: # otherwise choose mode and offset of 0
                 mode='wb' if obj.format in (BINARY,BINARY_GZ) else 'w'
                 obj.offset=0
-                mode='wb'
                 
             with open(filename,mode) as out:
                 writeArrayData(obj.data,obj.type,obj.format,out)
@@ -565,17 +575,18 @@ def writeArray(obj,stream,basepath,appendFile,overwriteFile):
 #                with open(filename,mode) as o:
 #                    o.write(dat)
                     
+        if obj.offset:
             attrs['offset']=obj.offset
-            
-            if obj.size:
-                attrs['size']=obj.size
+        
+        if obj.size:
+            attrs['size']=obj.size
             
         stream.element('array',attrs)
     else:
         with XMLStream.tag(stream,'array',attrs) as o:
-            out=BytesIO()
+            out=StringIO()
             writeArrayData(obj.data,obj.type,obj.format,out)
-            dat=out.getvalue().decode()
+            dat=out.getvalue()
             dat=dat.strip().split('\n')
             for line in dat:
                 o.writeline(line.strip())

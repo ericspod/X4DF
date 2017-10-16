@@ -27,7 +27,7 @@ from __future__ import print_function, division
 import os,sys,glob,unittest,shutil,tempfile, base64
 import xml.etree.ElementTree
 
-from io import StringIO,BytesIO
+#from io import StringIO,BytesIO
 
 import numpy as np
 
@@ -39,6 +39,7 @@ testdir=os.path.join(rootdir,'testdata')
 sys.path.append(rootdir)
 from x4df import nodes,topology,mesh,array,dataset,BASE64_GZ,BASE64,BINARY, BINARY_GZ, writeFile,readFile
 
+from x4df import StringIO,BytesIO
 
 trimeshxml='''<?xml version="1.0" encoding="UTF-8"?>
 <x4df>
@@ -58,7 +59,7 @@ trimeshxml='''<?xml version="1.0" encoding="UTF-8"?>
 '''
 
 
-def getTriMeshDS(matformat=None,nodefile=None,indsfile=None):
+def createTriMeshDS(matformat=None,nodefile=None,indsfile=None):
     nodespec=nodes('nodesmat')
     topo=topology('tris','trismat','Tri1NL')
     meshobj=mesh('triangle',None,[nodespec],[topo])
@@ -72,15 +73,23 @@ def getTriMeshDS(matformat=None,nodefile=None,indsfile=None):
     return dataset([meshobj],None,[nodear,indar])
 
 
+def createOctahedron(dim=10):
+    dim2=dim//2
+    grid=np.sum(np.abs(np.ogrid[-dim2:dim2+1,-dim2:dim2+1,-dim2:dim2+1]))
+    octa=(grid<dim2).astype(np.float32)
+    return octa
+    
+
+
 class TestIO(unittest.TestCase):
     def setUp(self):
         self.tempdir=tempfile.mkdtemp()
         
-        self.trimesh=getTriMeshDS()
-        self.trimeshB64=getTriMeshDS(BASE64)
-        self.trimeshB64GZ=getTriMeshDS(BASE64_GZ)
-        self.trimeshBin=getTriMeshDS(BINARY)
-        self.trimeshBinGZ=getTriMeshDS(BINARY_GZ)
+        self.trimesh=createTriMeshDS()
+        self.trimeshB64=createTriMeshDS(BASE64)
+        self.trimeshB64GZ=createTriMeshDS(BASE64_GZ)
+        self.trimeshBin=createTriMeshDS(BINARY)
+        self.trimeshBinGZ=createTriMeshDS(BINARY_GZ)
         
     def tearDown(self):
         shutil.rmtree(self.tempdir)
@@ -98,7 +107,7 @@ class TestIO(unittest.TestCase):
         xfile=self.tempfile('trimesh.x4df')
         nfile=self.tempfile('nodes')
         
-        mesh=getTriMeshDS(nodefile=nfile)
+        mesh=createTriMeshDS(nodefile=nfile)
         writeFile(mesh,xfile)
         
         self.assertEqual(mesh.arrays[0].size,3,'Bad node array size')
@@ -111,7 +120,7 @@ class TestIO(unittest.TestCase):
         xfile=self.tempfile('trimesh.x4df')
         nfile=self.tempfile('nodes')
         
-        mesh=getTriMeshDS(nodefile=nfile,indsfile=nfile)
+        mesh=createTriMeshDS(nodefile=nfile,indsfile=nfile)
         writeFile(mesh,xfile)
         
         self.assertEqual(mesh.arrays[0].size,3,'Bad node array size')
@@ -126,7 +135,7 @@ class TestIO(unittest.TestCase):
         xfile=self.tempfile('trimesh.x4df')
         nfile=self.tempfile('nodes')
         
-        mesh=getTriMeshDS(BASE64,nfile)
+        mesh=createTriMeshDS(BASE64,nfile)
         writeFile(mesh,xfile)
         
         meshdata=mesh.arrays[0].data
@@ -143,7 +152,7 @@ class TestIO(unittest.TestCase):
         xfile=self.tempfile('trimesh.x4df')
         nfile=self.tempfile('nodes')
         
-        mesh=getTriMeshDS(BASE64,nfile,nfile)
+        mesh=createTriMeshDS(BASE64,nfile,nfile)
         writeFile(mesh,xfile)
         
         meshdata=mesh.arrays[0].data
@@ -168,35 +177,38 @@ class TestIO(unittest.TestCase):
         
     def testWriteReadB64(self):
         '''Test reading and writing base64 and base64_gz formats.'''
-        s=BytesIO()
+        s=StringIO()
         writeFile(self.trimeshB64,s)
         s.seek(0)
         ds=readFile(s)
         
-        s1=BytesIO()
+        s1=StringIO()
         writeFile(self.trimeshB64GZ,s1)
         s1.seek(0)
         ds1=readFile(s1)
         
-        self.assertTrue(np.all(ds.arrays[0].data==ds1.arrays[0].data))
+        self.assertEqual(self.trimeshB64.arrays[0].shape,'3 3')
         
-#    def testReadWrite1(self):
-#        '''Test reading from an XML string and then writing an identical document.'''
-#        obj=readFile(StringIO(trimeshxml))
-#        s=StringIO()
-#        writeFile(obj,s)
-#        self.assertEqual(s.getvalue().strip(),trimeshxml.strip())
-#        
-#    def testBadString(self):
-#        '''Test correct raise of ParseError on bad input to readFile().'''
-#        with self.assertRaises(xml.etree.ElementTree.ParseError):
-#            readFile('Not valid filename or XML data')
-#    
-#    def testFileRead1(self):
-#        '''Tests reading from a testdata files.'''    
-#        for f in glob.glob(os.path.join(testdir,'*.x4df')):
-#            obj=readFile(os.path.join(testdir,f))
-#            self.assertIsNotNone(obj,'Failed to read '+f)
+        self.assertTrue(np.all(self.trimeshB64.arrays[0].data==ds.arrays[0].data),'Base64 data not the same as original')
+        self.assertTrue(np.all(ds.arrays[0].data==ds1.arrays[0].data),'Base64 and Base64_gz data not the same')
+        
+    def testReadWrite1(self):
+        '''Test reading from an XML string and then writing an identical document.'''
+        obj=readFile(StringIO(trimeshxml))
+        s=StringIO()
+        writeFile(obj,s)
+        self.assertEqual(s.getvalue().strip(),trimeshxml.strip(),'Writer not writing XML identical to source')
+        
+    def testBadString(self):
+        '''Test correct raise of ParseError on bad input to readFile().'''
+        with self.assertRaises(xml.etree.ElementTree.ParseError):
+            readFile('Not valid filename or XML data')
+    
+    def testFileRead1(self):
+        '''Tests reading from testdata files.'''    
+        for f in glob.glob(os.path.join(testdir,'*.x4df')):
+            obj=readFile(os.path.join(testdir,f))
+            self.assertIsNotNone(obj,'Failed to read '+f)
     
     
 if __name__ == '__main__':
