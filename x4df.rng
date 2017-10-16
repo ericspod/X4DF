@@ -124,6 +124,12 @@
     </attribute>
   </define>
   <!-- array offset value, skip rows for text, bytes for binary -->
+  <define name="Size">
+    <attribute name="size">
+      <data type="integer"/>
+    </attribute>
+  </define>
+  <!-- array size value, size of array or number of lines for array's section in file -->
   <define name="InitialNodes">
     <attribute name="initialnodes"/>
   </define>
@@ -321,6 +327,9 @@
       </optional>
       <optional>
         <ref name="Offset"/>
+      </optional>
+      <optional>
+        <ref name="Size"/>
       </optional>
       <optional>
         <ref name="Filename"/>

@@ -24,10 +24,10 @@ Unit tests to run with Nose. Use command "nosetests tests.py" or "python tests.p
 '''
 
 from __future__ import print_function, division
-import os,sys,glob,unittest,shutil,tempfile, base64
+import os,sys,glob,unittest,shutil,tempfile, base64, gzip
 import xml.etree.ElementTree
 
-#from io import StringIO,BytesIO
+from io import StringIO
 
 import numpy as np
 
@@ -39,9 +39,8 @@ testdir=os.path.join(rootdir,'testdata')
 sys.path.append(rootdir)
 from x4df import nodes,topology,mesh,array,dataset,BASE64_GZ,BASE64,BINARY, BINARY_GZ, writeFile,readFile
 
-from x4df import StringIO,BytesIO
 
-trimeshxml='''<?xml version="1.0" encoding="UTF-8"?>
+trimeshxml=u'''<?xml version="1.0" encoding="UTF-8"?>
 <x4df>
  <mesh name="triangle">
   <nodes src="nodesmat"/>
@@ -168,6 +167,18 @@ class TestIO(unittest.TestCase):
             filecontents=o.read().strip()
             self.assertEqual(filecontents,b64,'File contents length %i does not match expected contents of length %i'%(len(filecontents),len(b64)))
         
+    def testWriteCompressedFile1(self):
+        mfile=self.tempfile('trimesh.x4df')
+        dfile=self.tempfile('dat.gz')
+        
+        mesh=createTriMeshDS(BINARY,dfile,dfile)
+        writeFile(mesh,mfile)
+        
+        origdat=mesh.arrays[0].data.astype(np.float32).tobytes()
+        origdat+=mesh.arrays[1].data.astype(np.uint8).tobytes()
+        dat=gzip.open(dfile).read()
+        self.assertEqual(dat,origdat,'Compressed file does not contain same contents as original arrays:\n %r != %r'%(dat,origdat))
+        
     def testWriteRead1(self):
         '''Tests applying the results from writeFile() to readFile().'''
         s=StringIO()
@@ -213,5 +224,6 @@ class TestIO(unittest.TestCase):
     
 if __name__ == '__main__':
     print(sys.version)
+    sys.stdout.flush()
     unittest.main()
     

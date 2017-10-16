@@ -118,6 +118,10 @@
     <xs:attribute name="offset" use="required" type="xs:integer"/>
   </xs:attributeGroup>
   <!-- array offset value, skip rows for text, bytes for binary -->
+  <xs:attributeGroup name="Size">
+    <xs:attribute name="size" use="required" type="xs:integer"/>
+  </xs:attributeGroup>
+  <!-- array size value, size of array or number of lines for array's section in file -->
   <xs:attributeGroup name="InitialNodes">
     <xs:attribute name="initialnodes" use="required"/>
   </xs:attributeGroup>
@@ -258,6 +262,7 @@
         </xs:simpleType>
       </xs:attribute>
       <xs:attribute name="offset" type="xs:integer"/>
+      <xs:attribute name="size" type="xs:integer"/>
       <xs:attribute name="filename"/>
       <xs:attribute name="sep"/>
     </xs:complexType>

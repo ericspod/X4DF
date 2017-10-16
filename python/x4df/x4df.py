@@ -88,14 +88,17 @@ import base64
 import gzip
 import contextlib
 import numpy as np
-from numpy.compat import asbytes
 
-if sys.version_info.major>2:
-    from io import StringIO,BytesIO
-else:
-    from StringIO import StringIO
-    BytesIO=StringIO
-    #from io import BytesIO
+from numpy.compat import asbytes,asstr, asunicode
+
+from io import StringIO,BytesIO
+
+#if sys.version_info.major>2:
+#    from io import StringIO,BytesIO
+#else:
+#    from StringIO import StringIO
+#    BytesIO=StringIO
+#    #from io import BytesIO
 
 ### Types and Definitions
 
@@ -274,7 +277,7 @@ def readArrayData(shape,dimorder,type_,format_,offset, fullfilename,sep,text):
         length=None
     
     if format_ in (None,ASCII):
-        arr=np.loadtxt(fullfilename or StringIO(text),dtype_,skiprows=offset,delimiter=sep)
+        arr=np.loadtxt(fullfilename or StringIO(asunicode(text)),dtype_,skiprows=offset,delimiter=sep)
     elif fullfilename:
         with open(fullfilename,'rb') as o:
             dat=o.read()
@@ -336,7 +339,7 @@ def readFile(obj_or_path):
         if os.path.isfile(obj_or_path):
             basepath=os.path.dirname(obj_or_path)
         else:
-            obj_or_path=StringIO(obj_or_path)
+            obj_or_path=StringIO(asunicode(obj_or_path))
             
     root=ET.parse(obj_or_path)
     meshes=map(readMesh,root.findall('mesh'))
@@ -352,7 +355,7 @@ class XMLStream(object):
     '''This type wraps a file-like object to provide XML-writing methods. It is used with the `tag' context.'''
     def __init__(self,stream,sep=' '):
         self.stream=stream
-        self.write=stream.write
+        #self.write=stream.write
         self.sep=sep
         self.names=[]
 
@@ -371,9 +374,12 @@ class XMLStream(object):
         values=[name]+['%s="%s"'%(k,v) for k,v in attrs.items()]
         self.writeline('<%s/>'%(' '.join(values)))
 
+    def write(self,val):
+        self.stream.write(asunicode(val))
+
     def writeline(self,val):
         spacing=self.sep*len(self.names)
-        self.write(spacing+val+'\n')
+        self.write(spacing+asstr(val)+'\n')
 
     @staticmethod
     @contextlib.contextmanager
@@ -490,43 +496,45 @@ def writeImage(obj,stream):
                 o.element('imagedata',attrs)
 
 
-def writeArrayData(data,type_,format_,outstream):
-    '''Writes `data' to the stream `outstream' after being converted to dtype `type_' and formatted as `format_'.'''
+def writeArrayData(data,type_,format_,outstream,compresslevel=6,b64linelen=80):
+    '''
+    Writes the numpy array `data' to the stream `outstream' after being converted to dtype `type_' and formatted as
+    defined by `format_'. The `type_' must be a valid X4DF type and `format_' must be a member of validFormats or None in
+    which case ASCII is used. The `outstream' must be a binary stream, otherwise exceptions related to writing binary to
+    a text stream will be raised in Python 3. The `compresslevel' value is the gzip compression level used if the format
+    is a compressed type, and `b64linelen' is the length of base64 text lines (breaking base64 data into multiple lines
+    is easier to read). 
+    '''
+    assert format_ is None or format_ in validFormats, 'Invalid array format: %r'%format_
+    
     dtype_=parseType(type_)
-    #out=StringIO('')
-    b64linelen=80
-    format_=format_ if format_ in validFormats else ASCII
+    data=data.astype(dtype_)
 
-    if format_==ASCII:
+    if format_ in (None,ASCII):
         data=reshape2D(data)
-        out=BytesIO()
-        np.savetxt(out,data,fmt='%s')
-        outstream.write(out.getvalue().decode())
+        np.savetxt(outstream,data,fmt='%s')
     else:
-        dat=data.astype(dtype_).tostring()
+        dat=data.tobytes() # convert to binary
         
+        # compress data with gzip RFC 1952 algorithm
         if format_ in (BINARY_GZ, BASE64_GZ):
             out=BytesIO()
-            gzip.GzipFile(fileobj=out,mode='wb',compresslevel=6).write(dat)
+            gzip.GzipFile(fileobj=out,mode='wb',compresslevel=compresslevel).write(dat)
             dat=out.getvalue()
         
+        # convert to base64
         if format_ in (BASE64, BASE64_GZ):
-            dat=base64.b64encode(dat)#.decode()
+            dat=base64.b64encode(dat)
 
             for i in range(0, len(dat), b64linelen):
-                line=dat[i:i+b64linelen]+'\n'
-                try:
-                    outstream.write(line)
-                except:
-                    sys.stderr.write(str(outstream)+'\n')
-                    raise
-
+                line=dat[i:i+b64linelen]+asbytes('\n')
+                outstream.write(line)
         else:
-            outstream.write(dat)
+            outstream.write(dat) # write whole data block
 
 
 def writeArray(obj,stream,basepath,appendFile,overwriteFile):
-    '''Write an array to XML and store its data to file if necessary, overwriting existing if `overwriteFile.'''
+    '''Write an array to XML and store its data to file if necessary, overwriting existing if `overwriteFile'.'''
     attrs=OrderedDict({'name':obj.name})
 
     if obj.shape is None and obj.format not in (None,ASCII):
@@ -543,37 +551,48 @@ def writeArray(obj,stream,basepath,appendFile,overwriteFile):
     if obj.filename:
         attrs['filename']=obj.filename
         
-    #dat=writeArrayData(obj.data,obj.type,obj.format)
-
     if obj.filename: 
         filename=os.path.join(basepath,obj.filename)
-        if overwriteFile or not os.path.isfile(filename):
-            if appendFile: # if appending to existing file, choose mode and offset
-                if obj.format in (BINARY,BINARY_GZ):
-                    mode='ab'
-                    obj.offset=os.path.getsize(filename) # byte count
+        isCompressed=filename.lower().endswith('.gz')
+        openfunc=gzip.open if isCompressed else open
+        
+        def getSize():
+            '''Get the size of the file's contents, this is uncompressed size for compressed files.'''
+            with openfunc(filename) as o:
+                if obj.format in (BINARY,BINARY_GZ): # count bytes
+                    size=0
+                    dat=o.read(1024)
+                    while dat:
+                        size+=len(dat)
+                        dat=o.read(1024)
                 else:
-                    mode='a'
-                    obj.offset=sum(1 for _ in open(filename)) # line count
-                    
-            else: # otherwise choose mode and offset of 0
-                mode='wb' if obj.format in (BINARY,BINARY_GZ) else 'w'
-                obj.offset=0
+                    size=sum(1 for _ in o) # count lines
+            
+            return size
+        
+        if overwriteFile or not os.path.isfile(filename):
+            mode='wb'
+            obj.offset=0
+            
+            # if appending to existing file, choose mode and offset
+            if appendFile: 
+                mode='ab'
+                obj.offset=getSize()
+#                if obj.format in (BINARY,BINARY_GZ):
+#                    obj.offset=os.path.getsize(filename) # byte count
+#                else:
+#                    with openfunc(filename) as o:
+#                        obj.offset=sum(1 for _ in o) # line count
                 
-            with open(filename,mode) as out:
+            with openfunc(filename,mode) as out:
                 writeArrayData(obj.data,obj.type,obj.format,out)
                 
-            if obj.format in (BINARY,BINARY_GZ):
-                obj.size=os.path.getsize(filename)-obj.offset
-            else:
-                obj.size=sum(1 for _ in open(filename))-obj.offset
-#                
-#            if obj.format in (BASE64_GZ,BINARY_GZ):
-#                with gzip.GzipFile(filename,mode,6) as o:
-#                    o.write(dat)
+            obj.size=getSize()-obj.offset
+#            if obj.format in (BINARY,BINARY_GZ):
+#                obj.size=os.path.getsize(filename)-obj.offset
 #            else:
-#                with open(filename,mode) as o:
-#                    o.write(dat)
+#                with openfunc(filename) as o:
+#                    obj.size=sum(1 for _ in o)-obj.offset
                     
         if obj.offset:
             attrs['offset']=obj.offset
@@ -584,9 +603,9 @@ def writeArray(obj,stream,basepath,appendFile,overwriteFile):
         stream.element('array',attrs)
     else:
         with XMLStream.tag(stream,'array',attrs) as o:
-            out=StringIO()
+            out=BytesIO()
             writeArrayData(obj.data,obj.type,obj.format,out)
-            dat=out.getvalue()
+            dat=asstr(out.getvalue())
             dat=dat.strip().split('\n')
             for line in dat:
                 o.writeline(line.strip())
@@ -602,8 +621,8 @@ def writeFile(obj,obj_or_path,overwriteFiles=True):
         stream=open(obj_or_path,'w')
 
     try:
-        stream.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-
+        stream.write(u'<?xml version="1.0" encoding="UTF-8"?>\n')
+        
         with XMLStream.tag(stream,'x4df') as ostream:
             for mesh in (obj.meshes or []):
                 writeMesh(mesh,ostream)
