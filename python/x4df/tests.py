@@ -27,7 +27,7 @@ from __future__ import print_function, division
 import os,sys,glob,unittest,shutil,tempfile, base64, gzip
 import xml.etree.ElementTree
 
-from io import StringIO
+from io import StringIO,BytesIO
 
 import numpy as np
 
@@ -37,7 +37,7 @@ rootdir=os.path.join(scriptdir,'..','..')
 testdir=os.path.join(rootdir,'testdata')
 
 sys.path.append(rootdir)
-from x4df import nodes,topology,mesh,array,dataset,BASE64_GZ,BASE64,BINARY, BINARY_GZ, writeFile,readFile
+from x4df import nodes,topology,mesh,array,meta,dataset,BASE64_GZ,BASE64,BINARY, BINARY_GZ, writeFile,readFile
 
 
 trimeshxml=u'''<?xml version="1.0" encoding="UTF-8"?>
@@ -79,7 +79,6 @@ def createOctahedron(dim=10):
     return octa
     
 
-
 class TestIO(unittest.TestCase):
     def setUp(self):
         self.tempdir=tempfile.mkdtemp()
@@ -87,8 +86,9 @@ class TestIO(unittest.TestCase):
         self.trimesh=createTriMeshDS()
         self.trimeshB64=createTriMeshDS(BASE64)
         self.trimeshB64GZ=createTriMeshDS(BASE64_GZ)
-        self.trimeshBin=createTriMeshDS(BINARY)
-        self.trimeshBinGZ=createTriMeshDS(BINARY_GZ)
+        
+        self.mfile=self.tempfile('trimesh.x4df')
+        self.dfile=self.tempfile('dat')
         
     def tearDown(self):
         shutil.rmtree(self.tempdir)
@@ -96,18 +96,31 @@ class TestIO(unittest.TestCase):
     def tempfile(self,filename):
         return os.path.join(self.tempdir,filename)
         
-    def testWrite1(self):
+### Basic tests    
+    
+    def testBasicWrite(self):
         '''Tests writeFile.'''
         s=StringIO()
         writeFile(self.trimesh,s)
         
+    def testStringWrite(self):
+        '''Test reading from an XML string and then writing an identical document.'''
+        obj=readFile(StringIO(trimeshxml))
+        s=StringIO()
+        writeFile(obj,s)
+        self.assertEqual(s.getvalue().strip(),trimeshxml.strip(),'Writer not writing XML identical to source')
+        
+    def testBadString(self):
+        '''Test correct raise of ParseError on bad input to readFile().'''
+        with self.assertRaises(xml.etree.ElementTree.ParseError):
+            readFile('Not valid filename or XML data')
+ 
+### Test writing to separate data file with text, binary, and compressed data
+       
     def testWriteSeparateFile1(self):
         '''Test writing one array to a separate file.'''
-        xfile=self.tempfile('trimesh.x4df')
-        nfile=self.tempfile('nodes')
-        
-        mesh=createTriMeshDS(nodefile=nfile)
-        writeFile(mesh,xfile)
+        mesh=createTriMeshDS(nodefile=self.dfile)
+        writeFile(mesh,self.mfile)
         
         self.assertEqual(mesh.arrays[0].size,3,'Bad node array size')
         
@@ -116,11 +129,8 @@ class TestIO(unittest.TestCase):
             
     def testWriteSeparateFile2(self):
         '''Test writing multiple arrays to a separate file.'''
-        xfile=self.tempfile('trimesh.x4df')
-        nfile=self.tempfile('nodes')
-        
-        mesh=createTriMeshDS(nodefile=nfile,indsfile=nfile)
-        writeFile(mesh,xfile)
+        mesh=createTriMeshDS(nodefile=self.dfile,indsfile=self.dfile)
+        writeFile(mesh,self.mfile)
         
         self.assertEqual(mesh.arrays[0].size,3,'Bad node array size')
         self.assertEqual(mesh.arrays[1].size,1,'Bad index array size')
@@ -129,13 +139,29 @@ class TestIO(unittest.TestCase):
         with open(mesh.arrays[0].filename) as o:
             self.assertEqual(o.read(),'0.0 0.0 0.0\n1.0 0.0 0.0\n0.0 1.0 0.0\n1 0 2\n','Bad separate file contents')
             
-    def testWriteSeparateFile3(self):
-        '''Test writing one array to a separate b64 file.'''
-        xfile=self.tempfile('trimesh.x4df')
-        nfile=self.tempfile('nodes')
+    def testWriteBinaryFile1(self):
+        '''Test writing multiple binary arrays to a separate file.'''
+        mesh=createTriMeshDS(BINARY,self.dfile,self.dfile)
+        writeFile(mesh,self.mfile)
         
-        mesh=createTriMeshDS(BASE64,nfile)
-        writeFile(mesh,xfile)
+        meshtype=np.dtype('float32')
+        indtype=np.dtype('uint8')
+        
+        binary=mesh.arrays[0].data.astype(meshtype).tobytes()
+        binary+=mesh.arrays[1].data.astype(indtype).tobytes()
+        
+        self.assertEqual(mesh.arrays[0].size,meshtype.itemsize*9,'Bad node array size')
+        self.assertEqual(mesh.arrays[0].offset,0,'Bad node array offset')
+        self.assertEqual(mesh.arrays[1].size,indtype.itemsize*3,'Bad index array size')
+        self.assertEqual(mesh.arrays[1].offset,meshtype.itemsize*9,'Bad index array offset')
+        
+        with open(mesh.arrays[0].filename,'rb') as o:
+            self.assertEqual(o.read(),binary,'Bad binary file contents')        
+            
+    def testWriteB64File1(self):
+        '''Test writing one array to a separate b64 file.'''
+        mesh=createTriMeshDS(BASE64,self.dfile)
+        writeFile(mesh,self.mfile)
         
         meshdata=mesh.arrays[0].data
         b64=base64.b64encode(meshdata.astype(np.dtype('float32')).tostring()).decode()
@@ -146,13 +172,10 @@ class TestIO(unittest.TestCase):
             filecontents=o.read().strip()
             self.assertEqual(filecontents,b64,'File contents length %i does not match expected contents of length %i'%(len(filecontents),len(b64)))
 
-    def testWriteSeparateFile4(self):
+    def testWriteB64File2(self):
         '''Test writing multiple arrays to a separate b64 file.'''
-        xfile=self.tempfile('trimesh.x4df')
-        nfile=self.tempfile('nodes')
-        
-        mesh=createTriMeshDS(BASE64,nfile,nfile)
-        writeFile(mesh,xfile)
+        mesh=createTriMeshDS(BASE64,self.dfile,self.dfile)
+        writeFile(mesh,self.mfile)
         
         meshdata=mesh.arrays[0].data
         indsdata=mesh.arrays[1].data
@@ -160,6 +183,7 @@ class TestIO(unittest.TestCase):
         b64+='\n'+base64.b64encode(indsdata.astype(np.dtype('uint8')).tostring()).decode()
         
         self.assertEqual(mesh.arrays[0].size,1,'Bad node array size')
+        self.assertEqual(mesh.arrays[0].offset,0,'Bad node array offset')
         self.assertEqual(mesh.arrays[1].size,1,'Bad index array size')
         self.assertEqual(mesh.arrays[1].offset,1,'Bad index array offset')
         
@@ -168,26 +192,60 @@ class TestIO(unittest.TestCase):
             self.assertEqual(filecontents,b64,'File contents length %i does not match expected contents of length %i'%(len(filecontents),len(b64)))
         
     def testWriteCompressedFile1(self):
-        mfile=self.tempfile('trimesh.x4df')
-        dfile=self.tempfile('dat.gz')
+        '''Test writing to a .gz compressed separate file.'''
+        mesh=createTriMeshDS(BINARY,self.dfile+'.gz',self.dfile+'.gz')
+        writeFile(mesh,self.mfile)
         
-        mesh=createTriMeshDS(BINARY,dfile,dfile)
-        writeFile(mesh,mfile)
+        binary=mesh.arrays[0].data.astype(np.float32).tobytes()
+        binary+=mesh.arrays[1].data.astype(np.uint8).tobytes()
         
-        origdat=mesh.arrays[0].data.astype(np.float32).tobytes()
-        origdat+=mesh.arrays[1].data.astype(np.uint8).tobytes()
-        dat=gzip.open(dfile).read()
-        self.assertEqual(dat,origdat,'Compressed file does not contain same contents as original arrays:\n %r != %r'%(dat,origdat))
+        with gzip.open(mesh.arrays[0].filename) as o:
+            self.assertEqual(o.read(),binary,'Compressed file does not contain same contents as original arrays')
+            
+    def testWriteBinaryGZFile1(self):
+        '''Test writing single compressed binary arrays to a separate file.'''
+        mesh=createTriMeshDS(BINARY_GZ,self.dfile,self.dfile)
+        writeFile(mesh,self.mfile)
         
+        meshtype=np.dtype('float32')
+        indtype=np.dtype('uint8')
+        
+        binary=BytesIO()
+        with gzip.GzipFile(fileobj=binary,mode='wb',compresslevel=6) as o:
+            o.write(mesh.arrays[0].data.astype(meshtype).tobytes())
+        
+        nodesize=len(binary.getvalue())
+        self.assertEqual(mesh.arrays[0].size,nodesize,'Bad node array size')
+        self.assertEqual(mesh.arrays[0].offset,0,'Bad node array offset')
+            
+        with gzip.GzipFile(fileobj=binary,mode='ab',compresslevel=6) as o:
+            o.write(mesh.arrays[1].data.astype(indtype).tobytes())
+            
+        self.assertEqual(mesh.arrays[1].size,len(binary.getvalue())-nodesize,'Bad index array size')
+        self.assertEqual(mesh.arrays[1].offset,nodesize,'Bad index array offset')
+            
+    def testWriteBadBinary(self):
+        '''Tests attempting to write binary data into a single-file object.'''
+        with self.assertRaises(ValueError):
+            writeFile(createTriMeshDS(BINARY),self.mfile)
+ 
+### Test reading and writing identical objects    
+       
     def testWriteRead1(self):
-        '''Tests applying the results from writeFile() to readFile().'''
+        '''Tests applying the results from writeFile() to readFile() using a StringIO buffer.'''
         s=StringIO()
         writeFile(self.trimesh,s)
         s.seek(0)
         readFile(s)
         
+    def testWriteRead2(self):
+        '''Tests writing a mesh to a file then reading it back.'''
+        for m in (self.trimesh,self.trimeshB64,self.trimeshB64GZ):
+            writeFile(m,self.mfile)
+            readFile(self.mfile)
+        
     def testWriteReadB64(self):
-        '''Test reading and writing base64 and base64_gz formats.'''
+        '''Test reading and writing base64 and base64_gz formats, ensuring they are the same when read.'''
         s=StringIO()
         writeFile(self.trimeshB64,s)
         s.seek(0)
@@ -202,18 +260,6 @@ class TestIO(unittest.TestCase):
         
         self.assertTrue(np.all(self.trimeshB64.arrays[0].data==ds.arrays[0].data),'Base64 data not the same as original')
         self.assertTrue(np.all(ds.arrays[0].data==ds1.arrays[0].data),'Base64 and Base64_gz data not the same')
-        
-    def testReadWrite1(self):
-        '''Test reading from an XML string and then writing an identical document.'''
-        obj=readFile(StringIO(trimeshxml))
-        s=StringIO()
-        writeFile(obj,s)
-        self.assertEqual(s.getvalue().strip(),trimeshxml.strip(),'Writer not writing XML identical to source')
-        
-    def testBadString(self):
-        '''Test correct raise of ParseError on bad input to readFile().'''
-        with self.assertRaises(xml.etree.ElementTree.ParseError):
-            readFile('Not valid filename or XML data')
     
     def testFileRead1(self):
         '''Tests reading from testdata files.'''    
@@ -221,6 +267,17 @@ class TestIO(unittest.TestCase):
             obj=readFile(os.path.join(testdir,f))
             self.assertIsNotNone(obj,'Failed to read '+f)
     
+    def testMetaWriteRead(self):
+        '''Tests writing and read metadata to a file.'''
+        child=meta('Child','I am a child')
+        m=meta('metavalue',None,None,[child])
+        tris=createTriMeshDS()
+        tris.metas=[m]
+        tris.meshes[0].metas=[m]
+        
+        writeFile(tris,self.mfile)
+        readFile(self.mfile)
+        
     
 if __name__ == '__main__':
     print(sys.version)

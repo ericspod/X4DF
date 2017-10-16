@@ -82,23 +82,13 @@ main README.md file:
 import xml.etree.ElementTree as ET
 from collections import OrderedDict
 import os
-import sys
-import math
 import base64
 import gzip
 import contextlib
+
 import numpy as np
 
-from numpy.compat import asbytes,asstr, asunicode
-
 from io import StringIO,BytesIO
-
-#if sys.version_info.major>2:
-#    from io import StringIO,BytesIO
-#else:
-#    from StringIO import StringIO
-#    BytesIO=StringIO
-#    #from io import BytesIO
 
 ### Types and Definitions
 
@@ -150,6 +140,12 @@ INDEX='index' # per topology index field
 
 # valid field types
 validFieldTypes=(NODE, ELEM, INDEX)
+
+# gzip compression level
+COMPRESS=6
+
+# base64 string line length, breaking base64 data into multiple lines is more readable
+B64LINELEN=80
 
 # identity transform object
 idTransform=transform(np.array([0,0,0]),np.eye(3),np.array([1,1,1]))
@@ -242,9 +238,9 @@ def readMesh(tree):
     '''Read a mesh element into a mesh object.'''
     name=tree.get('name')
     timescheme=readTimescheme(tree.find('timescheme'))
-    nodes=map(readNodes,tree.findall('nodes'))
-    topologies=map(readTopology,tree.findall('topology'))
-    fields=map(readField,tree.findall('field'))
+    nodes=[readNodes(n) for n in tree.findall('nodes')]
+    topologies=[readTopology(t) for t in tree.findall('topology')]
+    fields=[readField(f) for f in tree.findall('field')]
     metas=readMeta(tree.findall('meta'))
 
     return mesh(name,timescheme,nodes,topologies,fields,metas)
@@ -255,13 +251,13 @@ def readImage(tree):
     name=tree.get('name')
     timescheme=readTimescheme(tree.find('timescheme'))
     transform_=readTransform(tree.find('transform'))
-    imagedata=map(readImageData,tree.findall('imagedata'))
+    imagedata=[readImageData(i) for i in tree.findall('imagedata')]
     metas=readMeta(tree.findall('meta'))
 
     return image(name,timescheme,transform_,imagedata,metas)
 
 
-def readArrayData(shape,dimorder,type_,format_,offset, fullfilename,sep,text):
+def readArrayData(shape,dimorder,type_,format_,offset,size,fullfilename,sep,text,filestore):
     '''Read the data for an array from the file `fullfilename' if given otherwise from the `text' string value.'''
     assert not format_ or format_ in validFormats
     assert fullfilename or text
@@ -272,24 +268,25 @@ def readArrayData(shape,dimorder,type_,format_,offset, fullfilename,sep,text):
     
     if shape is not None:
         shape=parseNumString(shape,int)
-        length=np.prod(shape)*dtype_.itemsize
-    else:
-        length=None
+        size=size or np.prod(shape)*dtype_.itemsize
     
     if format_ in (None,ASCII):
-        arr=np.loadtxt(fullfilename or StringIO(asunicode(text)),dtype_,skiprows=offset,delimiter=sep)
+        arr=np.loadtxt(fullfilename or StringIO(np.compat.asunicode(text)),dtype_,skiprows=offset,delimiter=sep)
     elif fullfilename:
-        with open(fullfilename,'rb') as o:
-            dat=o.read()
+        isCompressed=fullfilename.lower().endswith('.gz')
+        openfunc=gzip.open if isCompressed else open
+        
+        if fullfilename not in filestore:
+            with openfunc(fullfilename,'rb') as o:
+                filestore[fullfilename]=o.read()
             
+        dat=filestore[fullfilename][offset:offset+size]
+        
         if format_ in (BASE64_GZ,BINARY_GZ):
             dat=gzip.GzipFile(fileobj=BytesIO(dat)).read() # RFC 1952
             
         if format_ in (BASE64,BASE64_GZ):
-            b64len=int(4*math.ceil(length/3.0)) if length else None
-            dat=base64.b64decode(dat[offset:b64len])
-        else:
-            dat=dat[offset:length]
+            dat=base64.b64decode(dat)
 
         arr=np.frombuffer(dat,dtype=dtype_)
     else:
@@ -306,7 +303,7 @@ def readArrayData(shape,dimorder,type_,format_,offset, fullfilename,sep,text):
     return arr
 
 
-def readArray(arr,basepath='.'):
+def readArray(arr,basepath,filestore):
     '''Read an array from the array XML element `arr', loading files starting from directory `basepath'.'''
     name=arr.get('name')
     shape=arr.get('shape')
@@ -323,7 +320,7 @@ def readArray(arr,basepath='.'):
     if filename:
         fullfilename=os.path.join(basepath,filename)
 
-    arr=readArrayData(shape,dimorder,type_,format_,offset,fullfilename,sep,text)
+    arr=readArrayData(shape,dimorder,type_,format_,offset,size,fullfilename,sep,text,filestore)
 
     return array(name, shape, dimorder, type_, format_, offset, size,filename, arr)
 
@@ -335,16 +332,18 @@ def readFile(obj_or_path):
     file it will be treated as a XML string instead.
     '''
     basepath='.'
+    filestore={} # buffered storage for read file data, allows a file that is accessed multiple times to be read only once
+    
     if isinstance(obj_or_path,str):
         if os.path.isfile(obj_or_path):
             basepath=os.path.dirname(obj_or_path)
         else:
-            obj_or_path=StringIO(asunicode(obj_or_path))
+            obj_or_path=StringIO(np.compat.asunicode(obj_or_path))
             
     root=ET.parse(obj_or_path)
-    meshes=map(readMesh,root.findall('mesh'))
-    images=map(readImage,root.findall('image'))
-    arrays=[readArray(a,basepath) for a in root.findall('array')]
+    meshes=[readMesh(m) for m in root.findall('mesh')]
+    images=[readImage(i) for i in root.findall('image')]
+    arrays=[readArray(a,basepath,filestore) for a in root.findall('array')]
     metas=readMeta(root.findall('meta'))
 
     return dataset(meshes, images, arrays, metas)
@@ -375,11 +374,11 @@ class XMLStream(object):
         self.writeline('<%s/>'%(' '.join(values)))
 
     def write(self,val):
-        self.stream.write(asunicode(val))
+        self.stream.write(np.compat.asunicode(val))
 
     def writeline(self,val):
         spacing=self.sep*len(self.names)
-        self.write(spacing+asstr(val)+'\n')
+        self.write(spacing+np.compat.asstr(val)+'\n')
 
     @staticmethod
     @contextlib.contextmanager
@@ -496,7 +495,7 @@ def writeImage(obj,stream):
                 o.element('imagedata',attrs)
 
 
-def writeArrayData(data,type_,format_,outstream,compresslevel=6,b64linelen=80):
+def writeArrayData(data,type_,format_,outstream):
     '''
     Writes the numpy array `data' to the stream `outstream' after being converted to dtype `type_' and formatted as
     defined by `format_'. The `type_' must be a valid X4DF type and `format_' must be a member of validFormats or None in
@@ -519,15 +518,15 @@ def writeArrayData(data,type_,format_,outstream,compresslevel=6,b64linelen=80):
         # compress data with gzip RFC 1952 algorithm
         if format_ in (BINARY_GZ, BASE64_GZ):
             out=BytesIO()
-            gzip.GzipFile(fileobj=out,mode='wb',compresslevel=compresslevel).write(dat)
+            gzip.GzipFile(fileobj=out,mode='wb',compresslevel=COMPRESS).write(dat)
             dat=out.getvalue()
         
         # convert to base64
         if format_ in (BASE64, BASE64_GZ):
             dat=base64.b64encode(dat)
 
-            for i in range(0, len(dat), b64linelen):
-                line=dat[i:i+b64linelen]+asbytes('\n')
+            for i in range(0, len(dat), B64LINELEN):
+                line=dat[i:i+B64LINELEN]+np.compat.asbytes('\n')
                 outstream.write(line)
         else:
             outstream.write(dat) # write whole data block
@@ -535,11 +534,15 @@ def writeArrayData(data,type_,format_,outstream,compresslevel=6,b64linelen=80):
 
 def writeArray(obj,stream,basepath,appendFile,overwriteFile):
     '''Write an array to XML and store its data to file if necessary, overwriting existing if `overwriteFile'.'''
+    
+    if not obj.filename and obj.format in (BINARY,BINARY_GZ):
+        raise ValueError('Cannot store binary data in a X4DF file, must use separate data file')
+        
     attrs=OrderedDict({'name':obj.name})
 
     if obj.shape is None and obj.format not in (None,ASCII):
         obj.shape=toNumString(obj.data.shape,int)
-
+        
     if obj.shape is not None:
         attrs['shape']=obj.shape
     if obj.dimorder:
@@ -553,11 +556,12 @@ def writeArray(obj,stream,basepath,appendFile,overwriteFile):
         
     if obj.filename: 
         filename=os.path.join(basepath,obj.filename)
-        isCompressed=filename.lower().endswith('.gz')
-        openfunc=gzip.open if isCompressed else open
+        openfunc=open
+        if filename.lower().endswith('.gz'): # if the file is compressed replace open with gzip using compression level 6
+            openfunc=lambda f,m='rb':gzip.open(f,m,COMPRESS)
         
         def getSize():
-            '''Get the size of the file's contents, this is uncompressed size for compressed files.'''
+            '''Get the size/linecount of the file's contents, this is uncompressed size/linecount for compressed files.'''
             with openfunc(filename) as o:
                 if obj.format in (BINARY,BINARY_GZ): # count bytes
                     size=0
@@ -578,26 +582,16 @@ def writeArray(obj,stream,basepath,appendFile,overwriteFile):
             if appendFile: 
                 mode='ab'
                 obj.offset=getSize()
-#                if obj.format in (BINARY,BINARY_GZ):
-#                    obj.offset=os.path.getsize(filename) # byte count
-#                else:
-#                    with openfunc(filename) as o:
-#                        obj.offset=sum(1 for _ in o) # line count
                 
             with openfunc(filename,mode) as out:
                 writeArrayData(obj.data,obj.type,obj.format,out)
                 
             obj.size=getSize()-obj.offset
-#            if obj.format in (BINARY,BINARY_GZ):
-#                obj.size=os.path.getsize(filename)-obj.offset
-#            else:
-#                with openfunc(filename) as o:
-#                    obj.size=sum(1 for _ in o)-obj.offset
                     
-        if obj.offset:
+        if obj.offset is not None:
             attrs['offset']=obj.offset
         
-        if obj.size:
+        if obj.size is not None:
             attrs['size']=obj.size
             
         stream.element('array',attrs)
@@ -605,7 +599,7 @@ def writeArray(obj,stream,basepath,appendFile,overwriteFile):
         with XMLStream.tag(stream,'array',attrs) as o:
             out=BytesIO()
             writeArrayData(obj.data,obj.type,obj.format,out)
-            dat=asstr(out.getvalue())
+            dat=np.compat.asstr(out.getvalue())
             dat=dat.strip().split('\n')
             for line in dat:
                 o.writeline(line.strip())
