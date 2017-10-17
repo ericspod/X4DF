@@ -23,7 +23,7 @@ Example storing a mesh with a single triangle:
   0.0 1.0 0.0
  </array>
  <array name="trismat" shape="1 3" type="uint8">
-  1 0 3
+  1 0 2
  </array>
 </x4df>
 ```
@@ -39,18 +39,37 @@ every other element except image elements. The following sections will explain t
 
 ## Mesh Definition
 
+A mesh is composed of a set of spatial nodes, possibly a topology index which nodes define geometric elements, and fields
+defining data for each node or each element. The above example defines a mesh with one node array `nodesmat` storing three
+nodes, and one topology array `trismat` defining one triangle using nodes 1, 0, and 2 in that order. A mesh can have multiple
+node arrays if it is time-dependent in which case each array defines node positions at a given point in time. Multiple
+topologies can also be present if a field uses a different topology from mesh itself, in which case the field topology
+must have the same geometry as the mesh topology. The element type of a topology defines its geometry, order, and basis 
+function, in the above example `Tri1NL` defines triangles using linear nodal lagrange as the basis.
+
+The `mesh` XML element has a single attribute `name` which gives that mesh its name, and the following elements:
+ * `TimeScheme` (optional) - defines the start time of a time-dependent mesh and the step (interval) between timesteps, 
+ these are stored as `start` and `step` attributes containing floating point numbers
+ * `Nodes` (one or more) - defines a node array and its properties. The `src` attribute states the name of the array storing
+ the data, the optional `initialnodes` attributes names an array storing initial node positions if those given in `src` are
+ offsets from these, and the optional `timestep` attribute states the floating point time these nodes occur at.
+ * `Topology` (zero or more) - defines a topology which is an array of node indices. The `name` attribute gives the topology
+ a name, `src` states which array stores the index data, optional `elemtype` gives the element type definition, and the
+ optional `spatial` stores true if this topology defines spatial geometry or false if it is a field topology.
+ 
+
 ## Image Definition
 
 ## Array Definition
 
 The `array` XML elements specify and optionally contain arbitrary array data which can be stored as text or as binary data, either 
 in the XML document or in separate data files. In the XML text data is stored directly, binary data (compressed or 
-uncompressed) must be encoded in base64 to ensure the file remains a valid text document otherwise it must be stored in 
+uncompressed) must be encoded in base64 to ensure the file remains a valid text document, otherwise it must be stored in 
 a separate file. 
 
 The `array` XML element uses these attributes:
  * `name` - name of the array, used to reference the array data in other parts of the document
- * `shape` (optional for text only) - shape of the array, a space separated tuple of positive integer values
+ * `shape` (optional for ascii only) - shape of the array, a space separated tuple of positive integer values
  * `dimorder` (optional) - a text specifier indicating the order dimensions (unused for now)
  * `type` (optional) - type of the array elements, defaults to `float32`
  * `format` (optional) - states the data format, defaults to `ascii`
@@ -59,7 +78,7 @@ The `array` XML element uses these attributes:
  * `size` (optional) - states the number of lines (if `format` is `ascii`) or bytes (if `format` is not `ascii`) of the array
    as stored in a file, this is needed to allow reading an array segment from the middle of a file so is ignored if not reading from a file
  * `filename` (optional if format not `binary` or `binary_gz`) - file storing data, otherwise data must be stored in the body of the element
- * `sep` (optional) - separator character between elements in `ascii` format, default is ` `
+ * `sep` (optional) - separator character between elements in `ascii` format, default is space
 
 Array type is specified using the format `[><=]('uint','int','float')('8','16','32','64')` which states endianness, base
 type, and size. For example, an unsigned little endian 16-bit integer has type `<uint16`. Endianness is meaningful for binary
@@ -79,23 +98,29 @@ The valid formats for array data are as follows:
  * `binary_gz` - data is stored in binary representation directly, compressed with gzip, this must be in a separate binary file 
 
 Data in any format can be stored in a file, it is mandatory for `binary` or `binary_gz` data to be stored as such. When 
-reading data from a file, reading starts from the `offset` line if text or from the `offset` byte of the uncompressed data
-otherwise. The use of offsets allows multiple arrays to be stored in the same file. If `shape` is not given for text then 
-all the data from the offset will be read. The name of the file is given in `filename` which is typically a path relative 
-to the XML document. 
+reading data from a file, reading starts from the `offset` line if text or from the `offset` byte of data
+otherwise, and read for `size` number of lines if text or `size` number of bytes. The use of offsets allows multiple arrays 
+to be stored in the same file. If `shape` is not given for text then all the data from the offset will be read. The name 
+of the file is given in `filename` which is typically a path relative to the XML document. 
 
-For the compressed formats the whole file is compressed together, which can be done with the `gzip` command line tool. 
-To read from such a file, it first must be decompressed in its entirety then read from an offset in the resulting data.
+When storing multiple arrays in one file each array is encoded and/or compressed independently and appended to the file.
+The `offset` and `size` values are used to read a subsection of the file without having to decode/decompress other arrays.
+
+A whole file can be compressed as a single unit using the `gzip` command line tool, in which case the filename will be 
+appended with `.gz` and the names stored in the XML document must likewise be changed. When reading or writing to a file
+ending with `.gz` the library is expected to compress/decompress the byte stream as appropriate, in which case the `offset`
+and `size` parameters refer the uncompressed bytes.
 
 Creating base64 data is done by converting the array into its binary representation, compressing if `base64_gz` is used,
 then encoding as base64 text. This allows compressed data to be stored in the text body of a `array` element.
 
 ### Array Ordering
 
-As text or binary array values are stored in rightmost index first order, that is to say the rightmost index is the least
+All text or binary array values are stored in rightmost index first order, that is to say the rightmost index is the least
 significant. 
 Given an n-dimensional  array of dimensions `D=(d1,d2...,dn)`, a value at index `I=(i1,i2,....,in)` will be stored at the 
-address `Sigma(I[i]*Pi(D[i+1:]) for 1<=i<=n)`. This is called C or row-major ordering.
+address `Sigma(I[i]*Pi(D[i+1:]) for 1<=i<=n)` where `Sigma` is the sum operator and `Pi` the product operator. 
+This is also called C or row-major ordering.
 
 For example, the array `[[0,1],[2,3]]` with dimensions `(2,2)` is flattened out to the list `(0,1,2,3)`. These
 values would then be stored in a chosen data format in binary or as text. 
