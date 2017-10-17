@@ -49,13 +49,20 @@ function, in the above example `Tri1NL` defines triangles using linear nodal lag
 
 The `mesh` XML element has a single attribute `name` which gives that mesh its name, and the following elements:
  * `TimeScheme` (optional) - defines the start time of a time-dependent mesh and the step (interval) between timesteps, 
- these are stored as `start` and `step` attributes containing floating point numbers
- * `Nodes` (one or more) - defines a node array and its properties. The `src` attribute states the name of the array storing
- the data, the optional `initialnodes` attributes names an array storing initial node positions if those given in `src` are
- offsets from these, and the optional `timestep` attribute states the floating point time these nodes occur at.
+ these are stored as `start` and `step` attributes containing floating point numbers.
+ * `Nodes` (one or more) - defines a node array and its properties. Attributes:
+   * `src` - states the name of the array storing the data
+   * `initialnodes` (optional) - names an array storing initial node positions if those given in `src` are offsets from these
+   * `timestep` (optional) - states the floating point time these nodes occur at.
  * `Topology` (zero or more) - defines a topology which is an array of node indices. The `name` attribute gives the topology
  a name, `src` states which array stores the index data, optional `elemtype` gives the element type definition, and the
  optional `spatial` stores true if this topology defines spatial geometry or false if it is a field topology.
+ * `Field` (zero or more) - defines data fields for nodes or topologies. The `name` attribute gives the field a name which
+ may be shared by multiple fields at different timesteps, `src` names the source data array, optional `timestep` defines
+ what floating point timestep this field is defined for, optional `toponame` states the name of the topology the field uses
+ (default is the spatial topology), optional `spatial` states the name of the spatial topology if there are multiples, and
+ optional `fieldtype` states the type of field (`node`, `elem`, or `index`).
+ 
  
 
 ## Image Definition
