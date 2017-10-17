@@ -43,7 +43,7 @@ every other element except image elements. The following sections will explain t
 
 ## Array Definition
 
-The `array` XML elements specify and/or store arbitrary array data which can be stored as text or as binary data, either 
+The `array` XML elements specify and optionally contain arbitrary array data which can be stored as text or as binary data, either 
 in the XML document or in separate data files. In the XML text data is stored directly, binary data (compressed or 
 uncompressed) must be encoded in base64 to ensure the file remains a valid text document otherwise it must be stored in 
 a separate file. 
@@ -55,9 +55,11 @@ The `array` XML element uses these attributes:
  * `type` (optional) - type of the array elements, defaults to `float32`
  * `format` (optional) - states the data format, defaults to `ascii`
  * `offset` (optional) - states the offset in characters (if `format` is `ascii`) or bytes (if `format` is not `ascii`) 
-   the array starts from when reading from a file, default is 0 and is ignored if not reading from a file
+   the array starts from when reading from a separate file, default is 0 and is ignored if not reading from a file
+ * `size` (optional) - states the number of lines (if `format` is `ascii`) or bytes (if `format` is not `ascii`) of the array
+   as stored in a file, this is needed to allow reading an array segment from the middle of a file so is ignored if not reading from a file
  * `filename` (optional if format not `binary` or `binary_gz`) - file storing data, otherwise data must be stored in the body of the element
- * `sep` (optional) - separator character between elements in `ascii` format, default is `,`
+ * `sep` (optional) - separator character between elements in `ascii` format, default is ` `
 
 Array type is specified using the format `[><=]('uint','int','float')('8','16','32','64')` which states endianness, base
 type, and size. For example, an unsigned little endian 16-bit integer has type `<uint16`. Endianness is meaningful for binary

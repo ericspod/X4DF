@@ -276,17 +276,18 @@ def readArrayData(shape,dimorder,type_,format_,offset,size,fullfilename,sep,text
         isCompressed=fullfilename.lower().endswith('.gz')
         openfunc=gzip.open if isCompressed else open
         
-        if fullfilename not in filestore:
+        # load the entirety of the file into the storage map, this can then be used later if multiple arrays are stored in it
+        if fullfilename not in filestore: 
             with openfunc(fullfilename,'rb') as o:
                 filestore[fullfilename]=o.read()
             
         dat=filestore[fullfilename][offset:offset+size]
-        
-        if format_ in (BASE64_GZ,BINARY_GZ):
-            dat=gzip.GzipFile(fileobj=BytesIO(dat)).read() # RFC 1952
             
         if format_ in (BASE64,BASE64_GZ):
             dat=base64.b64decode(dat)
+        
+        if format_ in (BASE64_GZ,BINARY_GZ):
+            dat=gzip.GzipFile(fileobj=BytesIO(dat)).read() # RFC 1952
 
         arr=np.frombuffer(dat,dtype=dtype_)
     else:
@@ -524,9 +525,10 @@ def writeArrayData(data,type_,format_,outstream):
         # convert to base64
         if format_ in (BASE64, BASE64_GZ):
             dat=base64.b64encode(dat)
+            bnl=np.compat.asbytes('\n') # newline character as bytes
 
             for i in range(0, len(dat), B64LINELEN):
-                line=dat[i:i+B64LINELEN]+np.compat.asbytes('\n')
+                line=dat[i:i+B64LINELEN]+bnl
                 outstream.write(line)
         else:
             outstream.write(dat) # write whole data block
@@ -563,14 +565,14 @@ def writeArray(obj,stream,basepath,appendFile,overwriteFile):
         def getSize():
             '''Get the size/linecount of the file's contents, this is uncompressed size/linecount for compressed files.'''
             with openfunc(filename) as o:
-                if obj.format in (BINARY,BINARY_GZ): # count bytes
+                if obj.format in (None,ASCII):
+                    size=sum(1 for _ in o) # count lines
+                else: # count uncompressed bytes
                     size=0
                     dat=o.read(1024)
                     while dat:
                         size+=len(dat)
                         dat=o.read(1024)
-                else:
-                    size=sum(1 for _ in o) # count lines
             
             return size
         

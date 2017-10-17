@@ -37,8 +37,8 @@ rootdir=os.path.join(scriptdir,'..','..')
 testdir=os.path.join(rootdir,'testdata')
 
 sys.path.append(rootdir)
-from x4df import nodes,topology,mesh,array,meta,dataset,BASE64_GZ,BASE64,BINARY, BINARY_GZ, writeFile,readFile
-
+from x4df import nodes, topology, mesh, array, meta, dataset, image, transform, imagedata, writeFile, readFile
+from x4df import BASE64_GZ, BASE64, BINARY, BINARY_GZ, B64LINELEN
 
 trimeshxml=u'''<?xml version="1.0" encoding="UTF-8"?>
 <x4df>
@@ -72,11 +72,19 @@ def createTriMeshDS(matformat=None,nodefile=None,indsfile=None):
     return dataset([meshobj],None,[nodear,indar])
 
 
-def createOctahedron(dim=10):
+def createOctahedronDS(matformat=None,dataformat='float32',dim=12,imgfile=None):
     dim2=dim//2
     grid=np.sum(np.abs(np.ogrid[-dim2:dim2+1,-dim2:dim2+1,-dim2:dim2+1]))
     octa=(grid<dim2).astype(np.float32)
-    return octa
+    
+    trans=transform(np.zeros((3,)),np.eye(3),np.ones((3,)))
+
+    imd=imagedata('image',None,None,[])
+    im=image('octahedron',None,trans,[imd],[])
+
+    imgarr=array('image',' '.join(map(str,octa.shape)),None,dataformat,matformat,None,imgfile,octa)
+
+    return dataset(None,[im],[imgarr])
     
 
 class TestIO(unittest.TestCase):
@@ -88,6 +96,7 @@ class TestIO(unittest.TestCase):
         self.trimeshB64GZ=createTriMeshDS(BASE64_GZ)
         
         self.mfile=self.tempfile('trimesh.x4df')
+        self.ifile=self.tempfile('octa.x4df')
         self.dfile=self.tempfile('dat')
         
     def tearDown(self):
@@ -114,6 +123,11 @@ class TestIO(unittest.TestCase):
         '''Test correct raise of ParseError on bad input to readFile().'''
         with self.assertRaises(xml.etree.ElementTree.ParseError):
             readFile('Not valid filename or XML data')
+            
+    def testWriteBadBinary(self):
+        '''Tests attempting to write binary data into a single-file object.'''
+        with self.assertRaises(ValueError):
+            writeFile(createTriMeshDS(BINARY),self.mfile)
  
 ### Test writing to separate data file with text, binary, and compressed data
        
@@ -123,6 +137,7 @@ class TestIO(unittest.TestCase):
         writeFile(mesh,self.mfile)
         
         self.assertEqual(mesh.arrays[0].size,3,'Bad node array size')
+        self.assertEqual(mesh.arrays[0].offset,0,'Bad node array offset')
         
         with open(mesh.arrays[0].filename) as o:
             self.assertEqual(o.read(),'0.0 0.0 0.0\n1.0 0.0 0.0\n0.0 1.0 0.0\n','Bad separate file contents')
@@ -165,8 +180,9 @@ class TestIO(unittest.TestCase):
         
         meshdata=mesh.arrays[0].data
         b64=base64.b64encode(meshdata.astype(np.dtype('float32')).tostring()).decode()
+        lenwithnewlines=len(b64)+1+len(b64)//B64LINELEN
         
-        self.assertEqual(mesh.arrays[0].size,1,'Bad node array size')
+        self.assertEqual(mesh.arrays[0].size,lenwithnewlines,'Bad node array size')
         
         with open(mesh.arrays[0].filename) as o:
             filecontents=o.read().strip()
@@ -180,12 +196,15 @@ class TestIO(unittest.TestCase):
         meshdata=mesh.arrays[0].data
         indsdata=mesh.arrays[1].data
         b64=base64.b64encode(meshdata.astype(np.dtype('float32')).tostring()).decode()
-        b64+='\n'+base64.b64encode(indsdata.astype(np.dtype('uint8')).tostring()).decode()
+        lenwithnewlines=len(b64)+1+len(b64)//B64LINELEN
         
-        self.assertEqual(mesh.arrays[0].size,1,'Bad node array size')
+        b64+='\n'+base64.b64encode(indsdata.astype(np.dtype('uint8')).tostring()).decode()
+        lenwithnewlines1=len(b64)+1+len(b64)//B64LINELEN
+        
+        self.assertEqual(mesh.arrays[0].size,lenwithnewlines,'Bad node array size')
         self.assertEqual(mesh.arrays[0].offset,0,'Bad node array offset')
-        self.assertEqual(mesh.arrays[1].size,1,'Bad index array size')
-        self.assertEqual(mesh.arrays[1].offset,1,'Bad index array offset')
+        self.assertEqual(mesh.arrays[1].size,lenwithnewlines1-lenwithnewlines,'Bad index array size')
+        self.assertEqual(mesh.arrays[1].offset,lenwithnewlines,'Bad index array offset')
         
         with open(mesh.arrays[0].filename) as o:
             filecontents=o.read().strip()
@@ -224,10 +243,32 @@ class TestIO(unittest.TestCase):
         self.assertEqual(mesh.arrays[1].size,len(binary.getvalue())-nodesize,'Bad index array size')
         self.assertEqual(mesh.arrays[1].offset,nodesize,'Bad index array offset')
             
-    def testWriteBadBinary(self):
-        '''Tests attempting to write binary data into a single-file object.'''
-        with self.assertRaises(ValueError):
-            writeFile(createTriMeshDS(BINARY),self.mfile)
+    def testWriteB64GZFile1(self):
+        '''Test writing single compressed base64 arrays to a separate file.'''
+        mesh=createTriMeshDS(BASE64_GZ,self.dfile,self.dfile)
+        writeFile(mesh,self.mfile)
+        
+        meshtype=np.dtype('float32')
+        indtype=np.dtype('uint8')
+        
+        binary=BytesIO()
+        with gzip.GzipFile(fileobj=binary,mode='wb',compresslevel=6) as o:
+            o.write(mesh.arrays[0].data.astype(meshtype).tobytes())
+        
+        b64=base64.b64encode(binary.getvalue()).decode() # store node array
+        lenwithnewlines=len(b64)+1+len(b64)//B64LINELEN
+            
+        binary=BytesIO()
+        with gzip.GzipFile(fileobj=binary,mode='ab',compresslevel=6) as o:
+            o.write(mesh.arrays[1].data.astype(indtype).tobytes())
+            
+        b64+='\n'+base64.b64encode(binary.getvalue()).decode() # append index array
+        lenwithnewlines1=len(b64)+1+len(b64)//B64LINELEN
+            
+        self.assertEqual(mesh.arrays[0].size,lenwithnewlines,'Bad node array size')
+        self.assertEqual(mesh.arrays[0].offset,0,'Bad node array offset')
+        self.assertEqual(mesh.arrays[1].size,lenwithnewlines1-lenwithnewlines,'Bad index array size')
+        self.assertEqual(mesh.arrays[1].offset,lenwithnewlines,'Bad index array offset')
  
 ### Test reading and writing identical objects    
        
