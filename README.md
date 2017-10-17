@@ -75,12 +75,49 @@ must explicitly state what time they are assigned to in the `timestep` attribute
 A topology's element type definition, given in `elemtype`, defines its geometry, order, and basis function, in the above 
 example `Tri1NL` defines triangles using linear nodal lagrange as the basis (ie. a simple triangle). 
 The definitions follow the pattern `[geom][order][basis]` where `geom` is one of `Line`, `Tri`, `Quad`, `Tet`, or `Hex`, 
-`order` is `1` for linear, `2` for quadratic, etc., and `basis` is always `NL`. An extended description can be found here: 
-https://github.com/ericspod/Eidolon/wiki/Element-Type-Definition
+`order` is `1` for linear, `2` for quadratic, etc., and `basis` is always `NL`. An extended description can be found 
+[here](https://github.com/ericspod/Eidolon/wiki/Element-Type-Definition).
 Custom element type definitions can be given but it is then incumbent on the reader of the file to understand what they mean.
+
+Fields define values for each node of the mesh (if `fieldtype` is `node`), for each element in the spatial topology (`elem`),
+or for each individual index value in a spatial topology (`index`). If there is multiple node arrays but only one field with
+a given name then this field is assigned to the nodes for each timestep. If there is multiple fields with the same name, they
+are treated as an order list of fields assigned to successive timesteps, so if there is a single node field then the mesh is
+time-dependent in that the nodes do not move over time but the field changes, otherwise each field array is associated with the
+nodes at the equivalent timestep. Like the nodes element, the `timestep` attribute can be set to explicitly define what timestep
+a field is defined for. 
+
+Fields require a topology and basis function to allow interpolation between values. Typically this is the same topology as
+that used by the mesh (the spatial topology), but a field can have its own called a field topology whose `spatial` attribute
+is `false`. A field topology must have the same geometry type as the field's spatial topology since there is a one-to-one
+correspondence between spatial and field topology elements. For the example triangle mesh above, a field with a `Tri2NL` 
+topology would define a quadratic triangle having 6 field values.
 
 ## Image Definition
 
+Image are defined a one or more planes or volumes of values defined at specific spatial positions and timesteps.
+An image element has a single `name` attribute giving it a name and the following elements:
+ * `timescheme` (optional) - defines the start time of a time-dependent image sequence and the step (interval) between timesteps, 
+ these are stored as `start` and `step` attributes containing floating point numbers. If this is present then there must be
+ an ordered list of `imagedata` elements in the image or a single `imagedata` element defined with a 4D array.
+ * `transform` (optional) - a transform defining the position, orientation, and size of every image component
+ * `imagedata` (one or more) - a definition of an 2/3/4D array of pixel values as an image in space and time
+ 
+The `imagedata` element defines what array represents image data and where in space/time it is. The `src` attributes states
+which array defines the image data, and the optional `timestep` states what timestep the image is defined at. An optional
+`transform` element can be included to position the image in space, if not present then the transform for the image element
+is used.
+
+The `transform` element defines a spatial transform with these elements, each of which is optional but given in this order:
+ * `position` - text contains three floating point values defining the coordinate in 3D space of the image's minimal corner, 
+ default is '0 0 0'.
+ * `rmatrix` - text contains nine floating point values defining a 3-by-3 rotation matrix in row-major order, this defines
+ the rotation of the image around its minimal corner, default is `1 0 0 0 1 0 0 0 1`.
+ * `scale` - text contains three floating point values defining the dimensions of the image, default is `1 1 1`.
+
+If a transform is defined for an image then it is applied to every `imagedata` element, otherwise each `imagedata` should
+define their own.
+ 
 ## Array Definition
 
 The `array` XML elements specify and optionally contain arbitrary array data which can be stored as text or as binary data, either 
