@@ -44,26 +44,40 @@ defining data for each node or each element. The above example defines a mesh wi
 nodes, and one topology array `trismat` defining one triangle using nodes 1, 0, and 2 in that order. A mesh can have multiple
 node arrays if it is time-dependent in which case each array defines node positions at a given point in time. Multiple
 topologies can also be present if a field uses a different topology from mesh itself, in which case the field topology
-must have the same geometry as the mesh topology. The element type of a topology defines its geometry, order, and basis 
-function, in the above example `Tri1NL` defines triangles using linear nodal lagrange as the basis.
+must have the same geometry as the mesh topology.
 
 The `mesh` XML element has a single attribute `name` which gives that mesh its name, and the following elements:
- * `TimeScheme` (optional) - defines the start time of a time-dependent mesh and the step (interval) between timesteps, 
+ * `timescheme` (optional) - defines the start time of a time-dependent mesh and the step (interval) between timesteps, 
  these are stored as `start` and `step` attributes containing floating point numbers.
- * `Nodes` (one or more) - defines a node array and its properties. Attributes:
+ * `nodes` (one or more) - defines a node array and its properties. Attributes:
    * `src` - states the name of the array storing the data
    * `initialnodes` (optional) - names an array storing initial node positions if those given in `src` are offsets from these
-   * `timestep` (optional) - states the floating point time these nodes occur at.
- * `Topology` (zero or more) - defines a topology which is an array of node indices. The `name` attribute gives the topology
- a name, `src` states which array stores the index data, optional `elemtype` gives the element type definition, and the
- optional `spatial` stores true if this topology defines spatial geometry or false if it is a field topology.
- * `Field` (zero or more) - defines data fields for nodes or topologies. The `name` attribute gives the field a name which
- may be shared by multiple fields at different timesteps, `src` names the source data array, optional `timestep` defines
- what floating point timestep this field is defined for, optional `toponame` states the name of the topology the field uses
- (default is the spatial topology), optional `spatial` states the name of the spatial topology if there are multiples, and
- optional `fieldtype` states the type of field (`node`, `elem`, or `index`).
+   * `timestep` (optional) - states the floating point timestep these nodes are defined at
+ * `topology` (zero or more) - defines a topology which is an array of node indices. Attributes:
+   * `name` - gives the topology a name
+   * `src`  - states which array stores the index data
+   * `elemtype` (optional) - gives the element type definition
+   * `spatial` (optional) - stores `true` if this topology defines spatial geometry or `false` if it is a field topology.
+ * `field` (zero or more) - defines data fields for nodes or topologies. Attributes:
+   * `name` - gives the field a name which may be shared by multiple fields at different timesteps
+   * `src` - names the source data array which must have as many rows as the field's topology, each row is a data element
+   * `timestep` (optional) - defines what floating point timestep this field is defined for
+   * `toponame` (optional) - states the name of the topology the field uses (default is the spatial topology)
+   * `spatial` (optional) - states the name of the spatial topology if there are multiples
+   * `fieldtype` (optional) - states the type of field (`node`, `elem`, or `index`)
  
- 
+A time-dependent mesh must have either multiple node definitions, multiple fields with the same name, or both. In these
+cases the nodes/fields are defined for different points in time. If the `timescheme` is present this defines the start time
+and time between each step, in which case the node/field definitions are treated as ordered lists and assigned to timesteps
+starting from the given start and incrementing by the step value. If `timescheme` is not given then each node/field element
+must explicitly state what time they are assigned to in the `timestep` attribute.  
+
+A topology's element type definition, given in `elemtype`, defines its geometry, order, and basis function, in the above 
+example `Tri1NL` defines triangles using linear nodal lagrange as the basis (ie. a simple triangle). 
+The definitions follow the pattern `[geom][order][basis]` where `geom` is one of `Line`, `Tri`, `Quad`, `Tet`, or `Hex`, 
+`order` is `1` for linear, `2` for quadratic, etc., and `basis` is always `NL`. An extended description can be found here: 
+https://github.com/ericspod/Eidolon/wiki/Element-Type-Definition
+Custom element type definitions can be given but it is then incumbent on the reader of the file to understand what they mean.
 
 ## Image Definition
 
