@@ -233,7 +233,7 @@ All arrays stored in a file must be one of the text formats (`ascii`, `base64`, 
 (`binary_gz`, `base64_gz`), mixing text and binary formats is not allowed. When reading an array from such a file, the
 `offset` and `size` values are in lines if the data is text, and bytes if binary. 
 
-### Image Transform
+## Image Transform
 
 A transform defines three components: an translation or offset vector in 3D space (`tx`, `ty`, `tz`), a scale vector in
 3D space (`sx`, `sy`, `sz`), and a rotation 3x3 matrix (`a`,`b`,`c`,`d`,`e`,`f`,`g`,`h`,`i`). A 4x4 matrix defining the
@@ -249,7 +249,8 @@ sx*g sy*h sz*i tz
 This represents the transformation from a reference space to world space, in this case from image space to world space. 
 The reference 2D image is a 1x1 quad on the XY plane from `(0,0,0)` to `(1,1,0)`, whereas the reference 3D volume is the
 unit cube from `(0,0,0)` to `(1,1,1)`. This transform therefore represents the transformation of the unit quad/cube to the
-actual image in world space. 
+actual image in world space, consequently a voxel's world space position is obtained by multiplying its index by the transform
+matrix. 
 
 On a per-component basis, the translation value defines where in space the image's minimal corner is located (the minimal 
 corner being where the untransformed image's first voxel is located), the rotation matrix defining how the image is rotated 
