@@ -108,7 +108,7 @@ The `transform` element defines a spatial transform with these elements, each of
  default is '0 0 0'.
  * `rmatrix` - text contains nine floating point values defining a 3-by-3 rotation matrix in row-major order, this defines
  the rotation of the image around its minimal corner, default is `1 0 0 0 1 0 0 0 1`.
- * `scale` - text contains three floating point values defining the dimensions of the image, default is `1 1 1`.
+ * `scale` - text contains three floating point values defining the dimensions of the image voxels, default is `1 1 1`.
 
 If a transform is defined for an image then it is applied to every `imagedata` element, otherwise each `imagedata` should
 define their own.
@@ -240,7 +240,17 @@ A transform defines three components: an translation or offset vector in 3D spac
 transform for these components is 
 
 ```
-sx*a sy*b sz*c
-sx*d sy*e sz*f
-sx*g sy*h sz*i
+sx*a sy*b sz*c tx
+sx*d sy*e sz*f ty
+sx*g sy*h sz*i tz
+0    0    0    1
 ```
+
+This represents the transformation from a reference space to world space, in this case from image space to world space. 
+The reference 2D image is a 1x1 quad on the XY plane from `(0,0,0)` to `(1,1,0)`, whereas the reference 3D volume is the
+unit cube from `(0,0,0)` to `(1,1,1)`. This transform therefore represents the transformation of the unit quad/cube to the
+actual image in world space. 
+
+On a per-component basis, the translation value defines where in space the image's minimal corner is located (the minimal 
+corner being where the untransformed image's first voxel is located), the rotation matrix defining how the image is rotated 
+around the minimal corner, and the scale value defining the size of each voxel. 
