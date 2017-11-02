@@ -95,7 +95,7 @@ topology would define a quadratic triangle having 6 field values.
 
 ## Image Definition
 
-Image are defined a one or more planes or volumes of values defined at specific spatial positions and timesteps.
+Image are defined a one or more planes or volumes of values with specific spatial positions and timesteps.
 An image element has a single `name` attribute giving it a name and the following elements:
  * `timescheme` (optional) - defines the start time of a time-dependent image sequence and the step (interval) between timesteps, 
  these are stored as `start` and `step` attributes containing floating point numbers. If this is present then there must be
@@ -103,11 +103,6 @@ An image element has a single `name` attribute giving it a name and the followin
  * `transform` (optional) - a transform defining the position, orientation, and size of every image component
  * `imagedata` (one or more) - a definition of an 2/3/4D array of pixel values as an image in space and time
  
-The `imagedata` element defines what array represents image data and where in space/time it is. The `src` attributes states
-which array defines the image data, and the optional `timestep` states what timestep the image is defined at. An optional
-`transform` element can be included to position the image in space, if not present then the transform for the image element
-is used.
-
 The `transform` element defines a spatial transform with these elements, each of which is optional but given in this order:
  * `position` - text contains three floating point values defining the coordinate in 3D space of the image's minimal corner, 
  default is '0 0 0'.
@@ -117,7 +112,21 @@ The `transform` element defines a spatial transform with these elements, each of
 
 If a transform is defined for an image then it is applied to every `imagedata` element, otherwise each `imagedata` should
 define their own.
- 
+
+The `imagedata` element defines what array represents image data and where in space/time it is. The `src` attribute states
+which array defines the image data, and the optional `timestep` attribute states what timestep the image is defined at. 
+An optional `transform` element can be included to position the image in space, if not present then the transform for 
+the whole image element is used. The source arrays are treated as image planes or volumes, such that their dimensions are
+interpreted to be the X, Y, Z, and time dimensions of a 4D image volume. If the image is a 2D plane then the Z dimension is
+1, if the image is not time dependent then the time dimension is 1. A source array thus must have at least 4 dimensions,
+further dimensions beyond this are interpreted as pixel components or channels.
+
+If an image has multiple `imagedata` elements then each must have a `timestep` attribute and the `timescheme` element is
+ignored, this ensure that each image component has a placement in time. Typically multiple `imagedata` elements are present
+when multiple arrays are used to define images which intersect in space but at different times, so each array is a separate
+timestep of the same image. It is however possible to define an image composed of disjoint 2D or 3D images which are not
+necessarily evenly spaced in time. 
+
 ## Array Definition
 
 The `array` XML elements specify and optionally contain arbitrary array data which can be stored as text or as binary data, either 
@@ -217,3 +226,21 @@ To store array data, the array is first converted to a byte stream. If the forma
 algorithm (RFC 1952) is applied to produce a compresed byte stream. Subsequently if the format is `base64` or `base64_gz`
 then the byte stream is encoded as a base64 string with trailing `=` pad characters. 
 
+### Multi-Array Files
+
+Data files can contain multiple arrays which can be read using the `offset` and `size` attributes of `array` elements.
+All arrays stored in a file must be one of the text formats (`ascii`, `base64`, `base64_gz`) or one of the binary formats
+(`binary_gz`, `base64_gz`), mixing text and binary formats is not allowed. When reading an array from such a file, the
+`offset` and `size` values are in lines if the data is text, and bytes if binary. 
+
+### Image Transform
+
+A transform defines three components: an translation or offset vector in 3D space (`tx`, `ty`, `tz`), a scale vector in
+3D space (`sx`, `sy`, `sz`), and a rotation 3x3 matrix (`a`,`b`,`c`,`d`,`e`,`f`,`g`,`h`,`i`). A 4x4 matrix defining the
+transform for these components is 
+
+```
+sx*a sy*b sz*c
+sx*d sy*e sz*f
+sx*g sy*h sz*i
+```
