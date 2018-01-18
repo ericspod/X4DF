@@ -214,7 +214,7 @@ or field element) is stored on its own line. A vector array for example would be
 For 2D images indexed as (width,height) arrays, this implies the image will be stored in a transposed manner if the text
 data is viewed as an ASCII-art type image. Pixel values that run down the left-hand side of the image will instead be
 stored as the first row. For 3D/4D images indexed as (width,height,depth) or (width,height,depth,time), this implies that
-values in the depth or time dimention get stored first.
+values in the depth or time dimension get stored first.
 
 ### Binary Array
 
@@ -224,7 +224,8 @@ not valid in an XML document so must be stored in a separate file named in the `
 
 To store array data, the array is first converted to a byte stream. If the format is `binary_gz` or `base64_gz` the gzip 
 algorithm (RFC 1952) is applied to produce a compresed byte stream. Subsequently if the format is `base64` or `base64_gz`
-then the byte stream is encoded as a base64 string with trailing `=` pad characters. 
+then the byte stream is encoded as a base64 string with trailing `=` pad characters. Binary data can only be stored in an
+XML document as base64 encoded data.
 
 ### Multi-Array Files
 
@@ -232,6 +233,31 @@ Data files can contain multiple arrays which can be read using the `offset` and 
 All arrays stored in a file must be one of the text formats (`ascii`, `base64`, `base64_gz`) or one of the binary formats
 (`binary_gz`, `base64_gz`), mixing text and binary formats is not allowed. When reading an array from such a file, the
 `offset` and `size` values are in lines if the data is text, and bytes if binary. 
+
+### Array Interpretation
+
+The data stored in an array can be interpreted as lists of vectors, lists of topology element indices, lists of field values,
+or n-dimensional images. Mesh and image definitions as described above rely on these array types for their own representations,
+however the used can include any array data they choose which can be referred to in custom code or metadata.
+
+Below is the interpretation of the standard array types as used by `mesh` and `image` elements:
+
+ * Vector list: arrays with dimensions `(row,component)` are interpreted as lists of n-dimensional vectors, where `row` is
+ each vector and `component` is the dimension of the vector (eg. 2 for 2D vectors and 3 for 3D vectors). 
+ 
+ * Element list: arrays with dimensions `(row,index)` are interpreted as lists of elements definiting a mesh topology, 
+ where each row is an element containing the indices of vertices stored in a separate vector or field array.
+ 
+ * Field list: arrays with dimensions `(row,component)` are interpreted as lists of n-dimensional field values, where each
+ row is a single field value which has `component` number of values. A vector list is essentially a field list which is
+ interpreted as spatial values.
+ 
+ * Image volume: arrays with dimensions `(row,column)`, `(depth,row,column)`, or `(time,depth,row,column)` are interpreted
+ respectively as 2D, 3D, or 4D images. Given a 2D image, the `row` index increases in the image's downward or Y direction
+ and `column` in the rightward or X direction, such that an index `(i,j)` is the `j`'th pixel at row `i`. A 3/4D image
+ adds extra dimensions `depth` for volume images and `time` for time-varying images. Typically a 3D array would define a
+ volume and not a time-dependent 2D image, which instead should be stored as 4D array wher the `depth` dimension is 1.
+
 
 ## Image Transform
 
