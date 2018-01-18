@@ -242,17 +242,17 @@ however the used can include any array data they choose which can be referred to
 
 Below is the interpretation of the standard array types as used by `mesh` and `image` elements:
 
- * Vector list: arrays with dimensions `(row,component)` are interpreted as lists of n-dimensional vectors, where `row` is
+ * *Vector list*: arrays with dimensions `(row,component)` are interpreted as lists of n-dimensional vectors, where `row` is
  each vector and `component` is the dimension of the vector (eg. 2 for 2D vectors and 3 for 3D vectors). 
  
- * Element list: arrays with dimensions `(row,index)` are interpreted as lists of elements definiting a mesh topology, 
+ * *Topology*: arrays with dimensions `(row,index)` are interpreted as lists of elements definiting a mesh topology, 
  where each row is an element containing the indices of vertices stored in a separate vector or field array.
  
- * Field list: arrays with dimensions `(row,component)` are interpreted as lists of n-dimensional field values, where each
+ * *Field*: arrays with dimensions `(row,component)` are interpreted as lists of n-dimensional field values, where each
  row is a single field value which has `component` number of values. A vector list is essentially a field list which is
  interpreted as spatial values.
  
- * Image volume: arrays with dimensions `(row,column)`, `(depth,row,column)`, or `(time,depth,row,column)` are interpreted
+ * *Image volume*: arrays with dimensions `(row,column)`, `(depth,row,column)`, or `(time,depth,row,column)` are interpreted
  respectively as 2D, 3D, or 4D images. Given a 2D image, the `row` index increases in the image's downward or Y direction
  and `column` in the rightward or X direction, such that an index `(i,j)` is the `j`'th pixel at row `i`. A 3/4D image
  adds extra dimensions `depth` for volume images and `time` for time-varying images. Typically a 3D array would define a
