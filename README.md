@@ -28,6 +28,29 @@ Example storing a mesh with a single triangle:
 </x4df>
 ```
 
+Example storing an image which says "X4DF" in block capitals:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<x4df>
+ <image name="X4DF">
+  <transform>
+   <position>0.0 0.0 0.0</position>
+   <rmatrix>1.0 0.0 0.0 0.0 0 -1.0 0.0 1.0 0.0</rmatrix>
+   <scale>1.0 1.0 1.0</scale>
+  </transform>
+  <imagedata src="textimage"/>
+ </image>
+ <array name="textimage" shape="5 17" type="float32">
+  1.0 0.0 0.0 0.0 1.0 0.0 1.0 0.0 1.0 0.0 1.0 1.0 0.0 0.0 1.0 1.0 1.0
+  0.0 1.0 0.0 1.0 0.0 0.0 1.0 0.0 1.0 0.0 1.0 0.0 1.0 0.0 1.0 0.0 0.0
+  0.0 0.0 1.0 0.0 0.0 0.0 1.0 1.0 1.0 0.0 1.0 0.0 1.0 0.0 1.0 1.0 1.0  
+  0.0 1.0 0.0 1.0 0.0 0.0 0.0 0.0 1.0 0.0 1.0 0.0 1.0 0.0 1.0 0.0 0.0
+  1.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 1.0 0.0 1.0 1.0 0.0 0.0 1.0 0.0 0.0 
+ </array>
+</x4df>
+```
+
 This repository contains the definition of X4DF in terms of semantics in this document, XML definition in the
 `x4df.(rnc,rng,xsd)` files, and basic code library for reading and writing the format. Currently the Python code for IO
 is present but other languages will be added.
@@ -207,15 +230,6 @@ Values are separated by spaces as default, the array element can specify a diffe
 how values are stored, with integers represented as Python `int` literals and floating point numbers represented as
 Python `float` literals. 
 
-For mesh data whose arrays are typically lists of vectors indexed as (row,component) arrays, topology definitions indexed
-as (element,index) arrays, or data vectors indexed as (row,value) arrays, this implies that each component (vector, element,
-or field element) is stored on its own line. A vector array for example would be stored as `x0 y0 z0\nx1 y1 z1\n...`.
-
-For 2D images indexed as (width,height) arrays, this implies the image will be stored in a transposed manner if the text
-data is viewed as an ASCII-art type image. Pixel values that run down the left-hand side of the image will instead be
-stored as the first row. For 3D/4D images indexed as (width,height,depth) or (width,height,depth,time), this implies that
-values in the depth or time dimension get stored first.
-
 ### Binary Array
 
 Binary data is stored as described above in rightmost index first order, and can be compressed and/or encoded in base64.
@@ -225,14 +239,7 @@ not valid in an XML document so must be stored in a separate file named in the `
 To store array data, the array is first converted to a byte stream. If the format is `binary_gz` or `base64_gz` the gzip 
 algorithm (RFC 1952) is applied to produce a compresed byte stream. Subsequently if the format is `base64` or `base64_gz`
 then the byte stream is encoded as a base64 string with trailing `=` pad characters. Binary data can only be stored in an
-XML document as base64 encoded data.
-
-### Multi-Array Files
-
-Data files can contain multiple arrays which can be read using the `offset` and `size` attributes of `array` elements.
-All arrays stored in a file must be one of the text formats (`ascii`, `base64`, `base64_gz`) or one of the binary formats
-(`binary_gz`, `base64_gz`), mixing text and binary formats is not allowed. When reading an array from such a file, the
-`offset` and `size` values are in lines if the data is text, and bytes if binary. 
+XML document as base64 encoded data. 
 
 ### Array Interpretation
 
@@ -256,7 +263,20 @@ Below is the interpretation of the standard array types as used by `mesh` and `i
  respectively as 2D, 3D, or 4D images. Given a 2D image, the `row` index increases in the image's downward or Y direction
  and `column` in the rightward or X direction, such that an index `(i,j)` is the `j`'th pixel at row `i`. A 3/4D image
  adds extra dimensions `depth` for volume images and `time` for time-varying images. Typically a 3D array would define a
- volume and not a time-dependent 2D image, which instead should be stored as 4D array wher the `depth` dimension is 1.
+ volume and not a time-dependent 2D image, which instead should be stored as 4D array where the `depth` dimension is 1.
+
+In textual array representation, each component of mesh arrays (vector, element, field value) would be stored on its
+own line, eg. a vector array would be stored as `x0 y0 z0\nx1 y1 z1\n...`. For 2D images indexed as `(row,column)` 
+(ie. (height,width) or (Y,X)) arrays, this implies the image will be stored with each pixel row on its own line. This 
+preserves the representation of the image in text so that it can viewed like an ASCII-art type image. Subsequent images
+in a volume are stored in sequential depth order, followed by further volumes in time order.
+ 
+### Multi-Array Files
+
+Data files can contain multiple arrays which can be read using the `offset` and `size` attributes of `array` elements.
+All arrays stored in a file must be one of the text formats (`ascii`, `base64`, `base64_gz`) or one of the binary formats
+(`binary_gz`, `base64_gz`), mixing text and binary formats is not allowed. When reading an array from such a file, the
+`offset` and `size` values are in lines if the data is text, and bytes if binary.
 
 
 ## Image Transform
