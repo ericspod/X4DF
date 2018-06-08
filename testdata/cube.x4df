@@ -5,7 +5,8 @@
   <topology name="tris" src="trismat" elemtype="Tri1NL"/> <!-- declare triangle topology -->
   <field name="nodefield" src="fieldmat"/> <!-- declare per-node field -->
  </mesh>
- <array name="nodesmat"> <!-- list of cube vertex nodes -->
+ <!-- list of cube vertex nodes -->
+ <array name="nodesmat"> 
   0.0 0.0 0.0 
   1.0 0.0 0.0
   0.0 1.0 0.0
@@ -15,7 +16,8 @@
   0.0 1.0 1.0
   1.0 1.0 1.0
  </array>
- <array name="trismat" shape="12 3" type="uint8"> <!-- list of triangle indices -->
+ <!-- list of triangle indices -->
+ <array name="trismat" shape="12 3" type="uint8"> 
   1 0 3
   0 2 3
   0 1 4

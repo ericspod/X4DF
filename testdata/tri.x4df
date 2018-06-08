@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<x4df>
+ <mesh name="triangle">
+  <nodes src="nodesmat"/> 
+  <topology name="tris" src="trismat" elemtype="Tri1NL"/> 
+ </mesh>
+ <array name="nodesmat"> 
+  0.0 0.0 0.0 
+  1.0 0.0 0.0
+  0.0 1.0 0.0
+ </array>
+ <array name="trismat" shape="1 3" type="uint8">
+  1 0 2
+ </array>
+</x4df>

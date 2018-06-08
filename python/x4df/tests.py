@@ -36,7 +36,7 @@ scriptdir=os.path.dirname(os.path.abspath(__file__))
 rootdir=os.path.join(scriptdir,'..','..')
 testdir=os.path.join(rootdir,'testdata')
 
-sys.path.append(rootdir)
+sys.path.append(rootdir) # add the path to the source since it's assumed to not be installed
 from x4df import nodes, topology, mesh, array, meta, dataset, image, transform, imagedata, writeFile, readFile
 from x4df import BASE64_GZ, BASE64, BINARY, BINARY_GZ, B64LINELEN
 

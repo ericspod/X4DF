@@ -78,10 +78,11 @@ main README.md file:
     writeFile(ds,'tri.x4df')
 '''
 
-
+from __future__ import print_function, division
 import xml.etree.ElementTree as ET
 from collections import OrderedDict
 import os
+import sys
 import base64
 import gzip
 import contextlib
@@ -90,7 +91,26 @@ import numpy as np
 
 from io import StringIO,BytesIO
 
+
 ### Types and Definitions
+
+
+#TODO: read_csv is too picky with blank space if ' ' is the separator
+# attempt to define a text reading routine using pandas, defaulting to np.loadtxt if not available
+#try:
+#    from pandas import read_csv
+#    
+#    def readText(source,dtype,offset,sep):
+#        arr=read_csv(source,sep=sep or ' ',dtype=dtype,header=None,engine='c',skiprows=offset,lineterminator='\n',memory_map=True)
+#        return np.asarray(arr)
+#    
+#except ImportError:
+#    import warnings
+#    warnings.warn('Pandas not found, text data load will be slow.')
+    
+def readText(source,dtype,offset,sep):
+    return np.loadtxt(source,dtype,skiprows=offset,delimiter=sep)
+    
 
 def namedrecord(name,members):
     '''Returns a type with the given name and members like namedtuple but mutable and less efficient.'''
@@ -260,8 +280,9 @@ def readImage(tree):
 def readArrayData(shape,dimorder,type_,format_,offset,size,fullfilename,sep,text,filestore):
     '''Read the data for an array from the file `fullfilename' if given otherwise from the `text' string value.'''
     assert not format_ or format_ in validFormats
+    assert shape is not None or format_ in (None,ASCII), 'Shape must be specified for non-ascii data.'
     assert fullfilename or text
-    assert fullfilename or format_ not in validFormats[3:5], 'Binary data can only be stored in separate files'
+    assert fullfilename or format_ not in validFormats[3:5], 'Binary data can only be stored in separate files.'
 
     dtype_=parseType(type_)
     offset=int(offset or 0)
@@ -271,7 +292,8 @@ def readArrayData(shape,dimorder,type_,format_,offset,size,fullfilename,sep,text
         size=size or np.prod(shape)*dtype_.itemsize
     
     if format_ in (None,ASCII):
-        arr=np.loadtxt(fullfilename or StringIO(np.compat.asunicode(text)),dtype_,skiprows=offset,delimiter=sep)
+        #arr=np.loadtxt(fullfilename or StringIO(np.compat.asunicode(text)),dtype_,skiprows=offset,delimiter=sep)
+        arr=readText(fullfilename or StringIO(np.compat.asunicode(text)),dtype_,offset,sep)
     elif fullfilename:
         isCompressed=fullfilename.lower().endswith('.gz')
         openfunc=gzip.open if isCompressed else open
@@ -636,3 +658,9 @@ def writeFile(obj,obj_or_path,overwriteFiles=True):
         if isinstance(obj_or_path,str):
             stream.close()
 
+
+if __name__=='__main__':
+    for f in sys.argv[1:]:
+        print(f)
+        print(readFile(f))
+    

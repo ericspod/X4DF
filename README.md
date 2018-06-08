@@ -159,7 +159,7 @@ a separate file.
 
 The `array` XML element uses these attributes:
  * `name` - name of the array, used to reference the array data in other parts of the document
- * `shape` (optional for ascii only) - shape of the array, a space separated tuple of positive integer values
+ * `shape` (optional for 2D ascii only) - shape of the array, a space separated tuple of positive integer values
  * `dimorder` (optional) - a text specifier indicating the order dimensions (unused for now)
  * `type` (optional) - type of the array elements, defaults to `float32`
  * `format` (optional) - states the data format, defaults to `ascii`
